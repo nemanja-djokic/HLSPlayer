@@ -3,6 +3,7 @@
 
 #include <string>
 
+//Dummy class for now
 //Media Playlist that contains alternative Renditions
 class ExtXMedia
 {

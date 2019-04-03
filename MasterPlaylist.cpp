@@ -10,7 +10,7 @@ MasterPlaylist* MasterPlaylist::parsePlaylist(std::string hlsRoot)
     MasterPlaylist* toReturn = new MasterPlaylist();
     for(std::string line; std::getline(iss, line, '\r'); lineCount++)
     {
-        if(line.c_str()[0] == 0xa)
+        if(line.c_str()[0] == '\n')
             line = line.c_str() + 1; //HAX
         if(lineCount == 0 && line.compare(MASTER_PLAYLIST_FIRST_LINE) != 0)
         {
@@ -26,7 +26,7 @@ MasterPlaylist* MasterPlaylist::parsePlaylist(std::string hlsRoot)
                 {
                     std::string nextLine;
                     std::getline(iss, nextLine, '\r');
-                    if(nextLine.c_str()[0] == 0xa)
+                    if(nextLine.c_str()[0] == '\n')
                         nextLine = nextLine.c_str() + 1; //HAX
                     lineCount++;
                     toReturn->_extXStreamInf.insert(toReturn->_extXStreamInf.begin(), ExtXStreamInf(line, nextLine));
