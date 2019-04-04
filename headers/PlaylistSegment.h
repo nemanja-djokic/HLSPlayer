@@ -2,6 +2,7 @@
 #define _PSEGMENT_H_
 
 #include <string>
+#include <vector>
 
 class PlaylistSegment
 {
@@ -15,12 +16,14 @@ class PlaylistSegment
         std::string _extXMap;
         std::string _extXProgramDateTime;
         std::string _extXDateRange;
-        void* _tsData;
+        std::vector<char> _tsData;
         bool _isLoaded;
 
+        std::string _baseUrl;
         std::string _endpoint;
     public:
         PlaylistSegment(int, std::string, std::string, std::string);
+        ~PlaylistSegment();
 
         static const std::string EXTINF_TAG;
         static const std::string EXT_X_BYTERANGE_TAG;
@@ -39,8 +42,12 @@ class PlaylistSegment
         inline std::string getExtXMap(){return _extXMap;};
         inline std::string getExtXProgramDateTime(){return _extXProgramDateTime;};
         inline std::string getExtXDateRange(){return _extXDateRange;};
+        inline bool getIsLoaded(){return _isLoaded;};
+        inline size_t loadedSize(){return _tsData.size();};
 
         inline std::string getEndpoint(){return _endpoint;};
+
+        void loadSegment();
 
         friend std::ostream& operator<<(std::ostream&, const PlaylistSegment&);
 };

@@ -14,6 +14,7 @@ Playlist* Playlist::parsePlaylist(std::string content, std::string baseUrl)
     std::istringstream iss(content);
     int lineCount = 0;
     Playlist* toReturn = new Playlist();
+    toReturn->_isEnded = false;
     int segmentCounter = 0;
     for(std::string line; std::getline(iss, line, '\n'); lineCount++)
     {

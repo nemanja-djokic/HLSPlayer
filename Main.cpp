@@ -1,5 +1,6 @@
 #include <iostream>
 #include "headers/HlsUtil.h"
+#include "headers/Player.h"
 
 int main(int argc, char* argv[])
 {
@@ -22,5 +23,7 @@ int main(int argc, char* argv[])
     std::cout << playlist->getIsEnded() << std::endl;
     std::vector<PlaylistSegment> segments = playlist->getSegments();
     std::cout << segments.size() << std::endl;
+    Player player(segments);
+    
     return 0;
 }
