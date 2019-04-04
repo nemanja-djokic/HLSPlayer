@@ -9,10 +9,8 @@ Player::Player(std::vector<PlaylistSegment> segments)
 
 void Player::loadSegments()
 {
-    size_t averageSize = 0;
     for(unsigned int i = 0; i < _segments.size(); i++)
     {
         _segments[i].loadSegment();
-        averageSize += _segments[i].loadedSize();
     }
 }
