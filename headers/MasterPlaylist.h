@@ -3,19 +3,22 @@
 
 #include <string>
 #include <vector>
-#include "ExtXMedia.h"
 #include "ExtXStreamInf.h"
+#include "Playlist.h"
 
 //Contains all possible tags that can appear in master playlist
 class MasterPlaylist
 {
     private:
-        std::vector<ExtXMedia> _extXMedia;
         std::vector<ExtXStreamInf> _extXStreamInf;
+        std::string _rootPlaylistUrl;
+        std::string getEndpointForBitrate(int bitrate);
     public:
-        static MasterPlaylist* parsePlaylist(std::string);
-        inline std::vector<ExtXMedia> getExtXMedia(){return _extXMedia;};
+        static MasterPlaylist* parseMasterPlaylist(std::string, std::string);
         inline std::vector<ExtXStreamInf> getExtXStreamInf(){return _extXStreamInf;};
+        std::vector<int> getAvailableBitrates();
+        std::string getPlaylistContent(std::string);
+        Playlist* getPlaylistForBitrate(int bitrate);
 };
 
 #endif

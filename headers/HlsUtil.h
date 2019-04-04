@@ -3,6 +3,7 @@
 
 #include <string>
 #include "MasterPlaylist.h"
+#include "Playlist.h"
 
 extern const int OK;
 extern const int CONNECTION_FAILED;
@@ -19,9 +20,9 @@ class HlsUtil
         HlsUtil(std::string);
         ~HlsUtil();
         bool isValidState();
-        int testConnection();
         int readRootPlaylist();
-
+        inline std::vector<int> getAvailableBitrates(){return masterPlaylist->getAvailableBitrates();};
+        Playlist* getPlaylistForBitrate(int bitrate);
 };
 
 #endif

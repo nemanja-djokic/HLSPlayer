@@ -64,7 +64,7 @@ int HlsUtil::readRootPlaylist()
 
 int HlsUtil::parseMasterPlaylist(std::string buffer)
 {
-    MasterPlaylist* tempPlaylist = MasterPlaylist::parsePlaylist(buffer);
+    MasterPlaylist* tempPlaylist = MasterPlaylist::parseMasterPlaylist(buffer, this->rootPlaylistUrl);
     if(tempPlaylist != nullptr)
     {
         this->masterPlaylist = tempPlaylist;
@@ -75,6 +75,12 @@ int HlsUtil::parseMasterPlaylist(std::string buffer)
         return PARSE_FAILED;
     }
     
+}
+
+
+Playlist* HlsUtil::getPlaylistForBitrate(int bitrate)
+{
+        return this->masterPlaylist->getPlaylistForBitrate(bitrate);
 }
 
 size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)

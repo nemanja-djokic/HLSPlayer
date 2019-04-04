@@ -66,5 +66,6 @@ std::ostream& operator<<(std::ostream& stream, const ExtXStreamInf& a)
     << ((!a._audio.empty())?" audio:":"") << ((!a._audio.empty())?a._audio:"")
     << ((!a._video.empty())?" video:":"") << ((!a._video.empty())?a._video:"")
     << ((!a._subtitles.empty())?" subtitles:":"") << ((!a._subtitles.empty())?a._subtitles:"")
-    << ((!a._closedCaptions.empty())?" closed-captions:":"") << ((!a._closedCaptions.empty())?a._closedCaptions:"");
+    << ((!a._closedCaptions.empty())?" closed-captions:":"") << ((!a._closedCaptions.empty())?a._closedCaptions:"")
+    << " endpoint:" << a._endpoint;
 }
