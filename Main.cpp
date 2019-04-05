@@ -21,9 +21,10 @@ int main(int argc, char* argv[])
     }
     Playlist* playlist = util.getPlaylistForBitrate(maxBitrate);
     std::cout << playlist->getIsEnded() << std::endl;
-    std::vector<PlaylistSegment> segments = playlist->getSegments();
+    std::vector<PlaylistSegment> segments = *playlist->getSegments();
     std::cout << segments.size() << std::endl;
-    Player player(segments);
-    
+    Player player(playlist);
+    while(player.playNext());
+    delete playlist;
     return 0;
 }

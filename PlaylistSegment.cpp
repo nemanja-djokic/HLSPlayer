@@ -1,4 +1,5 @@
 #include "headers/PlaylistSegment.h"
+#include "headers/Constants.h"
 #include "curl/curl.h"
 #include <ostream>
 #include <iostream>
@@ -64,6 +65,11 @@ PlaylistSegment::PlaylistSegment(int num, std::string header, std::string endpoi
     };
 }
 
+PlaylistSegment::~PlaylistSegment()
+{
+    this->unloadSegment();
+}
+
 void PlaylistSegment::loadSegment()
 {
     bool loadFailed = false;
@@ -75,12 +81,12 @@ void PlaylistSegment::loadSegment()
         loadFailed = true;
         curl_easy_cleanup(curl);
     }
-    std::string tempBuffer;
+    std::vector<uint8_t> tempBuffer;
     CURLcode res;
     curl_easy_setopt(curl, CURLOPT_URL, (this->_baseUrl + this->_endpoint).c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, BinaryCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &this->_tsData);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &tempBuffer);
     res = curl_easy_perform(curl);
 
     if(res != CURLE_OK)
@@ -91,16 +97,25 @@ void PlaylistSegment::loadSegment()
         curl_easy_cleanup(curl);
     }
     if(!loadFailed)
-        std::cout << "segment " << this->_num << " loaded " << this->_tsData.size() / 1024 << "k" << std::endl;
-    this->_isLoaded = true;
+    {
+        this->_tsData = new uint8_t[tempBuffer.size()];
+        this->_tsDataSize = tempBuffer.size();
+        std::copy(tempBuffer.begin(), tempBuffer.end(), this->_tsData);
+        std::cout << "segment " << this->_num << " loaded " << this->_tsDataSize / TS_BLOCK_SIZE << " blocks overflow: " << this->_tsDataSize % TS_BLOCK_SIZE << std::endl;
+        this->_isLoaded = true;
+    }
 }
 
-PlaylistSegment::~PlaylistSegment()
+void PlaylistSegment::unloadSegment()
 {
-    
+    if(this->_isLoaded)
+    {
+        this->_isLoaded = false;
+        if(_tsData)
+            delete[] _tsData;
+        this->_tsDataSize = 0;
+    }
 }
-
-
 
 std::ostream& operator<<(std::ostream& stream, const PlaylistSegment& a)
 {
@@ -114,6 +129,6 @@ size_t BinaryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
     size_t realSize = size * nmemb;
     for(size_t i = 0; i < realSize; i++)
-        ((std::vector<char>*)userp)->insert(((std::vector<char>*)userp)->end(), ((char*)contents)[i]);
+        ((std::vector<uint8_t>*)userp)->insert(((std::vector<uint8_t>*)userp)->end(), ((uint8_t*)contents)[i]);
     return realSize;
 }

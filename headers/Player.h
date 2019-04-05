@@ -1,16 +1,25 @@
 #ifndef _PLAYER_H_
 #define _PLAYER_H_
 
-#include "PlaylistSegment.h"
+#include "Playlist.h"
+#include "TSVideo.h"
+#include "TSAudio.h"
 #include <vector>
 
 class Player
 {
     private:
-        std::vector<PlaylistSegment> _segments;
+        Playlist* _playlist;
         void loadSegments();
+        std::vector<TSVideo> _tsVideo;
+        std::vector<TSAudio> _tsAudio;
+        size_t _currentPosition;
     public:
-        Player(std::vector<PlaylistSegment>);
+        static const uint32_t VIDEO_PID_VAL;
+        static const uint32_t AUDIO_PID_VAL;
+        static const uint32_t PID_MASK;
+        Player(Playlist*);
+        bool playNext();
 };
 
 #endif

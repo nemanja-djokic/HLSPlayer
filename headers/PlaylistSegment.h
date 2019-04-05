@@ -16,7 +16,8 @@ class PlaylistSegment
         std::string _extXMap;
         std::string _extXProgramDateTime;
         std::string _extXDateRange;
-        std::vector<char> _tsData;
+        uint8_t* _tsData;
+        size_t _tsDataSize;
         bool _isLoaded;
 
         std::string _baseUrl;
@@ -43,11 +44,13 @@ class PlaylistSegment
         inline std::string getExtXProgramDateTime(){return _extXProgramDateTime;};
         inline std::string getExtXDateRange(){return _extXDateRange;};
         inline bool getIsLoaded(){return _isLoaded;};
-        inline size_t loadedSize(){return _tsData.size();};
+        inline size_t loadedSize(){return _tsDataSize;};
+        inline uint8_t* getTsData(){return _tsData;};
 
         inline std::string getEndpoint(){return _endpoint;};
 
         void loadSegment();
+        void unloadSegment();
 
         friend std::ostream& operator<<(std::ostream&, const PlaylistSegment&);
 };

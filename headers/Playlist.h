@@ -22,7 +22,7 @@ class Playlist
         //Returns data, duration is out param, filled with duration of the segment
         void* nextMediaBlock(double& duration);
         inline bool getIsEnded(){return _isEnded;};
-        inline std::vector<PlaylistSegment> getSegments(){return _mediaEndpoints;};
+        inline std::vector<PlaylistSegment>* getSegments(){return &_mediaEndpoints;};
 };
 
 #endif
