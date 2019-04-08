@@ -115,7 +115,7 @@ Playlist* MasterPlaylist::getPlaylistForBitrate(int bitrate)
     {
         if(std::stoi(it->getBandwidth()) == bitrate)
             return Playlist::parsePlaylist(getPlaylistContent(
-                ((it->getEndpoint().rfind("http://", 0) == 0)?(it->getEndpoint()):(this->_rootPlaylistUrl + it->getEndpoint()))),
+                ((it->getEndpoint().rfind("http", 0) == 0)?(it->getEndpoint()):(this->_rootPlaylistUrl + it->getEndpoint()))),
                 _rootPlaylistUrl
                 );
     }

@@ -8,3 +8,10 @@ void TSAudio::appendData(uint8_t* buffer, size_t len)
         this->_hasData = true;
     }
 }
+
+uint8_t* TSAudio::getPayload()
+{
+    uint8_t* out = new uint8_t[this->_audioPayload.size()];
+    std::copy(_audioPayload.begin(), _audioPayload.end(), out);
+    return out;
+}
