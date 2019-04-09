@@ -1,9 +1,9 @@
 PROGRAM = app
 CC = g++
-CFLAGS = -Wall -Werror -Wno-deprecated-declarations 
+CFLAGS = -g3 -Wall -Werror -Wno-deprecated-declarations -Wno-maybe-uninitialized -Wno-unused-function
 
 INCLUDE = 
-LIBS = -lSDL2main -lSDL2 -lcurl -lavdevice -lavformat -lavfilter -lavcodec -lswscale -lavutil -lpthread -lz
+LIBS = -lSDL2main -lSDL2 -lcurl -lavdevice -lavformat -lavfilter -lavcodec -lswscale -lavutil -lpthread -lz -lswresample
 LIBDIR = 
 
 SRC = $(wildcard *.cpp)

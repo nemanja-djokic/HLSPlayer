@@ -19,6 +19,7 @@ class Player
         size_t _currentPosition;
         SDL_Window* _playerWindow;
         SDL_Renderer* _playerRenderer;
+        SDL_Texture* _playerTexture;
     public:
         static const uint32_t VIDEO_PID_VAL;
         static const uint32_t AUDIO_PID_VAL;

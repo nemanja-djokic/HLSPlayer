@@ -6,9 +6,12 @@ extern "C"
     #include "libavcodec/avcodec.h"  
     #include "libavformat/avformat.h"
     #include "libswscale/swscale.h"  
+    #include "libavdevice/avdevice.h"
+    #include "libswresample/swresample.h"
     
     #include "SDL2/SDL.h"  
     #include "SDL2/SDL_thread.h"
+    #include "SDL2/SDL_audio.h"
 };
 #include <iostream>
 #include <fstream>
@@ -37,7 +40,7 @@ int packet_queue_put(PacketQueue *q, AVPacket *pkt)
     {
         return -1;
     }
-    pkt1 = (AVPacketList*)av_malloc(sizeof(AVPacketList));
+    pkt1 = (AVPacketList*)av_malloc(1024 * sizeof(AVPacketList));
     if (!pkt1)
     {
         return -1;
@@ -150,7 +153,6 @@ int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf, int buf_si
         audio_pkt_size = pkt.size;
     }
 }
-
 void audioCallback(void *userdata, Uint8 *stream, int len)
 {
     AVCodecContext *aCodecCtx = (AVCodecContext *)userdata;
@@ -207,7 +209,14 @@ Player::Player(Playlist* playlist)
     this->_playerWindow = nullptr;
     this->_playerRenderer = nullptr;
     audioq = new PacketQueue();
+    av_register_all();
+	avcodec_register_all();
+	avdevice_register_all();
+    avformat_network_init();
     std::thread(loadSegmentsThread, this).detach();
+    packet_queue_init(audioq);
+    SDL_PauseAudio(0);
+    //av_log_set_level(AV_LOG_PANIC);
 }
 
 void Player::loadSegments()
@@ -217,31 +226,13 @@ void Player::loadSegments()
         (*_playlist->getSegments())[i].loadSegment();
         uint8_t* segmentPayload = (*_playlist->getSegments())[i].getTsData();
         size_t payloadSize = (*_playlist->getSegments())[i].loadedSize();
-        TSVideo toInsertVideo;
-        TSAudio toInsertAudio;
+        TSVideo toInsertVideo((*_playlist->getSegments())[i].getEndpoint());
         for(size_t i = 0; i < payloadSize / TS_BLOCK_SIZE; i++)
         {
-            uint32_t header = (*(segmentPayload + i * TS_BLOCK_SIZE + 0) << 24)
-                + (*(segmentPayload + i * TS_BLOCK_SIZE + 1) << 16)
-                + (*(segmentPayload + i * TS_BLOCK_SIZE + 2) << 8)
-                + *(segmentPayload + i * TS_BLOCK_SIZE + 3);
-            uint32_t pid = (header & PID_MASK) >> 8;
-            if(pid == VIDEO_PID_VAL)
-            {
-                toInsertVideo.appendData(segmentPayload + i * TS_BLOCK_SIZE, TS_BLOCK_SIZE);
-                
-            }
-            else if (pid == AUDIO_PID_VAL)
-            {
-                toInsertVideo.appendData(segmentPayload + i * TS_BLOCK_SIZE, TS_BLOCK_SIZE);
-            }
-            else
-            {
-                //std::cout << "pid:" << pid << std::endl;
-            }
+            toInsertVideo.appendData(segmentPayload + i * TS_BLOCK_SIZE, TS_BLOCK_SIZE);
         }
+        toInsertVideo.prepareFile();
         this->_tsVideo.push_back(toInsertVideo);
-        this->_tsAudio.push_back(toInsertAudio);
     }
 }
 
@@ -250,66 +241,35 @@ void Player::loadSegment(uint32_t pos)
     (*_playlist->getSegments())[pos].loadSegment();
     uint8_t* segmentPayload = (*_playlist->getSegments())[pos].getTsData();
     size_t payloadSize = (*_playlist->getSegments())[pos].loadedSize();
-    TSVideo toInsertVideo;
-    TSAudio toInsertAudio;
+    TSVideo toInsertVideo((*_playlist->getSegments())[pos].getEndpoint());
     for(size_t i = 0; i < payloadSize / TS_BLOCK_SIZE; i++)
     {
-        uint32_t header = (*(segmentPayload + i * TS_BLOCK_SIZE + 0) << 24)
-            + (*(segmentPayload + i * TS_BLOCK_SIZE + 1) << 16)
-            + (*(segmentPayload + i * TS_BLOCK_SIZE + 2) << 8)
-            + *(segmentPayload + i * TS_BLOCK_SIZE + 3);
-        uint32_t pid = (header & PID_MASK) >> 8;
-        if(pid == VIDEO_PID_VAL)
-        {
-            toInsertVideo.appendData(segmentPayload + i * TS_BLOCK_SIZE, TS_BLOCK_SIZE);
-        }
-        else if (pid == AUDIO_PID_VAL)
-        {
-            toInsertVideo.appendData(segmentPayload + i * TS_BLOCK_SIZE, TS_BLOCK_SIZE);
-        }
-        else
-        {
-            //std::cout << "pid:" << pid << std::endl;
-        }
+        toInsertVideo.appendData(segmentPayload + i * TS_BLOCK_SIZE, TS_BLOCK_SIZE);
     }
+    toInsertVideo.prepareFile();
     this->_tsVideo.push_back(toInsertVideo);
-    this->_tsAudio.push_back(toInsertAudio);
 }
 
 bool Player::playNext()
 {
-    packet_queue_init(audioq);
-    //SDL_PauseAudio(0);
-    //av_log_set_level(AV_LOG_PANIC);
     while(!(*this->_playlist->getSegments())[_currentPosition].getIsLoaded());
     while(_currentPosition >= this->_tsVideo.size());
     TSVideo current = this->_tsVideo[_currentPosition];
-    TSAudio currentAudio = this->_tsAudio[_currentPosition];
     _currentPosition++;
-    uint8_t* payload = current.getPayload();
-    //uint8_t* audioPayload = currentAudio.getPayload();
-    std::ofstream tmpfile;
-    //std::ofstream tmpAudioFile;
-    tmpfile.open("tmp", std::ios::out | std::ios::binary);
-    //tmpAudioFile.open("tmpAudio", std::ios::out | std::ios::binary);
-    tmpfile.write((char*)payload, current.getSize());
-    //tmpfile.write((char*)audioPayload, currentAudio.getSize());
-
-    av_register_all();
     AVFormatContext *formatContext = nullptr;
-    if(avformat_open_input(&formatContext, "tmp", nullptr, nullptr) != 0)
+    //std::cout << "PATH:" << std::string("/dev/shm/") + current.getFname() << std::endl;
+    if(avformat_open_input(&formatContext, (std::string("/dev/shm/") + current.getFname()).c_str(), nullptr, nullptr) != 0)
     {
         std::cerr << "Format context failed" << std::endl;
         return false;
     }
-
     if(avformat_find_stream_info(formatContext, nullptr) < 0)
     {
         std::cerr << "Stream info failed" << std::endl;
         return false;
     }
 
-    av_dump_format(formatContext, 0, "tmp", 0);
+    av_dump_format(formatContext, 0, "/dev/shm/tmp", 0);
 
     int videoStream = -1;
     int audioStream = -1;
@@ -325,7 +285,7 @@ bool Player::playNext()
     if(videoStream == -1 || audioStream == -1) {  
         std::cerr << "Failed finding stream" << std::endl;
         return false;
-    }  
+    }
 
     AVCodecContext* codecContext = formatContext->streams[videoStream]->codec;
     AVCodecContext* audioCodecContextOrig = formatContext->streams[audioStream]->codec;
@@ -337,37 +297,55 @@ bool Player::playNext()
         std::cerr << "Unsupported codec" << std::endl;  
         return false;
     }
-
-    audioCodecContext = avcodec_alloc_context3(audioCodec);
-
-    if(avcodec_copy_context(audioCodecContext, audioCodecContextOrig) != 0)
-    {
-        std::cerr << "Couldn't copy audio codec context" << std::endl;
-        return false;
-    }
-
     SDL_AudioSpec wantedSpec;
     SDL_AudioSpec audioSpec;
-    wantedSpec.freq = audioCodecContext->sample_rate;
-    wantedSpec.format = AUDIO_S16SYS;
-    wantedSpec.channels = audioCodecContext->channels;
-    wantedSpec.silence = 1;
-    wantedSpec.samples = (uint16_t)882000;
-    wantedSpec.callback = audioCallback;
-    wantedSpec.userdata = audioCodecContext;
-    if(SDL_OpenAudio(&wantedSpec, &audioSpec) < 0)
-    {
-        std::cerr << "SDL_OpenAudio " << SDL_GetError() << std::endl;
-        return false;
-    }
-    AVDictionary* optionsDictionary = nullptr;
-    std::cout << "Samples:" << audioSpec.samples << std::endl;
 
-    if(avcodec_open2(codecContext, codec, &optionsDictionary) < 0 || avcodec_open2(audioCodecContextOrig, audioCodec, nullptr) < 0)
+    if(current.getFname() == _tsVideo.at(0).getFname())
+    {
+        if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER))
+        {
+            std::cerr << "Could not initialize SDL - " << SDL_GetError() << std::endl;
+            return false;
+        }
+        audioCodecContext = avcodec_alloc_context3(audioCodec);
+
+        if(avcodec_copy_context(audioCodecContext, audioCodecContextOrig) != 0)
+        {
+            std::cerr << "Couldn't copy audio codec context" << std::endl;
+            return false;
+        }
+        /*SwrContext* swrCtx = swr_alloc();
+	    if (!swrCtx) return false;
+	    av_opt_set_channel_layout(swrCtx, "in_channel_layout", audioCodecContext->channel_layout, 0);
+	    av_opt_set_channel_layout(swrCtx, "out_channel_layout", audioCodecContext->channel_layout, 0);
+	    av_opt_set_int(swrCtx, "in_sample_rate", audioCodecContext->sample_rate, 0);
+	    av_opt_set_int(swrCtx, "out_sample_rate", audioCodecContext->sample_rate, 0);
+	    av_opt_set_sample_fmt(swrCtx, "in_sample_fmt", audioCodecContext->sample_fmt, 0);
+	    av_opt_set_sample_fmt(swrCtx, "out_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
+        if (swr_init(swrCtx)) return false;  */
+        wantedSpec.freq = audioCodecContext->sample_rate;
+        wantedSpec.format = AUDIO_S16SYS;
+        wantedSpec.channels = audioCodecContext->channels;
+        wantedSpec.silence = 0;
+        wantedSpec.samples = 1024;
+        wantedSpec.callback = audioCallback;
+        wantedSpec.userdata = audioCodecContext;
+        std::cout << "CHANNELS:" << wantedSpec.channels << std::endl;
+        if(SDL_OpenAudio(&wantedSpec, &audioSpec) < 0)
+        {
+            std::cerr << "SDL_OpenAudio " << SDL_GetError() << std::endl;
+            return false;
+        }
+    }
+
+    AVDictionary* optionsDictionary = nullptr;
+    if(avcodec_open2(codecContext, codec, &optionsDictionary) < 0 || avcodec_open2(audioCodecContext, audioCodec, nullptr) < 0)
     {  
         std::cerr << "Could not open codec" << std::endl;
         return false; 
     }
+    //packet_queue_init(audioq);
+    //SDL_PauseAudio(0);
 
     //AVPixelFormat src_fix_fmt = codecContext->pix_fmt;
 	AVPixelFormat dst_fix_fmt = AV_PIX_FMT_BGR24;
@@ -376,7 +354,7 @@ bool Player::playNext()
     if(pFrameYUV == nullptr) {
         std::cerr << "Bad frame format" << std::endl;
         return false;  
-    }  
+    }
 
     struct SwsContext* sws_ctx = sws_getContext(  
         codecContext->width,  
@@ -403,12 +381,6 @@ bool Player::playNext()
     sdlRect.y = 0;  
     sdlRect.w = codecContext->width;  
     sdlRect.h = codecContext->height;
-    //std::cout << "W:" << codecContext->width << " H:" << codecContext->height << std::endl;
-
-    if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
-        std::cerr << "Could not initialize SDL - " << SDL_GetError() << std::endl;
-        return false;
-    }  
     if(_playerWindow == nullptr)
     {
         _playerWindow = SDL_CreateWindow("HLSPlayer",  
@@ -422,17 +394,18 @@ bool Player::playNext()
             return false;
         }
         _playerRenderer = SDL_CreateRenderer(_playerWindow, -1, SDL_RENDERER_TARGETTEXTURE);
-    }
 
-    SDL_Texture* sdlTexture = SDL_CreateTexture(  
-        _playerRenderer,  
-        SDL_PIXELFORMAT_BGR24,  
-        SDL_TEXTUREACCESS_STATIC, 
-        codecContext->width,  
-        codecContext->height);  
-	if(!sdlTexture)
-		return -1;
-	SDL_SetTextureBlendMode(sdlTexture,SDL_BLENDMODE_BLEND );
+        _playerTexture = SDL_CreateTexture(  
+            _playerRenderer,  
+            SDL_PIXELFORMAT_BGR24,  
+            SDL_TEXTUREACCESS_STATIC, 
+            codecContext->width,  
+            codecContext->height);  
+	    if(!_playerTexture)
+		    return false;
+	    SDL_SetTextureBlendMode(_playerTexture,SDL_BLENDMODE_BLEND);
+        //SDL_PauseAudio(0);
+    }
     AVPacket packet;  
     SDL_Event event;
 
@@ -451,13 +424,13 @@ bool Player::playNext()
                     pFrame->linesize,  
                     0,  
                     codecContext->height,  
-                    pFrameYUV->data,  
+                    pFrameYUV->data,
                     pFrameYUV->linesize  
                     );  
                   
-                SDL_UpdateTexture(sdlTexture, &sdlRect, pFrameYUV->data[0], pFrameYUV->linesize[0]);  
+                SDL_UpdateTexture(_playerTexture, &sdlRect, pFrameYUV->data[0], pFrameYUV->linesize[0]);  
                 SDL_RenderClear(_playerRenderer);  
-                SDL_RenderCopy(_playerRenderer, sdlTexture, &sdlRect, &sdlRect);  
+                SDL_RenderCopy(_playerRenderer, _playerTexture, &sdlRect, &sdlRect);  
                 SDL_RenderPresent(_playerRenderer);
             }
             int framerate = av_q2d(codecContext->framerate);
@@ -486,12 +459,14 @@ bool Player::playNext()
                 break;  
         }
     }
-  
-    
     av_free(pFrame);  
     av_free(pFrameYUV);   
     avcodec_close(codecContext);  
     avformat_close_input(&formatContext);
-    SDL_CloseAudio();
+    if(current.getFname() == _tsVideo.at(_tsVideo.size() - 1).getFname())
+    {
+        SDL_CloseAudio();
+        return false;
+    }
     return true;
 }

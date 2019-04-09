@@ -101,7 +101,7 @@ void PlaylistSegment::loadSegment()
         this->_tsData = new uint8_t[tempBuffer.size()];
         this->_tsDataSize = tempBuffer.size();
         std::copy(tempBuffer.begin(), tempBuffer.end(), this->_tsData);
-        std::cout << "segment " << this->_num << " loaded " << this->_tsDataSize / TS_BLOCK_SIZE << " blocks overflow: " << this->_tsDataSize % TS_BLOCK_SIZE << std::endl;
+        //std::cout << "segment " << this->_num << " loaded " << this->_tsDataSize / TS_BLOCK_SIZE << " blocks overflow: " << this->_tsDataSize % TS_BLOCK_SIZE << std::endl;
         this->_isLoaded = true;
     }
 }
