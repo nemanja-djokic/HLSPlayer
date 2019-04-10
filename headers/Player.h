@@ -6,7 +6,18 @@
 #include "TSAudio.h"
 #include <vector>
 
-#include <SDL2/SDL.h>
+extern "C"  
+{ 
+    #include "libavcodec/avcodec.h"  
+    #include "libavformat/avformat.h"
+    #include "libswscale/swscale.h"  
+    #include "libavdevice/avdevice.h"
+    #include "libswresample/swresample.h"
+    
+    #include "SDL2/SDL.h"  
+    #include "SDL2/SDL_thread.h"
+    #include "SDL2/SDL_audio.h"
+};
 
 class Player
 {
@@ -14,12 +25,21 @@ class Player
         Playlist* _playlist;
         void loadSegments();
         void loadSegment(uint32_t);
+        bool pollEvent(SDL_Event);
         std::vector<TSVideo> _tsVideo;
         std::vector<TSAudio> _tsAudio;
         size_t _currentPosition;
         SDL_Window* _playerWindow;
         SDL_Renderer* _playerRenderer;
         SDL_Texture* _playerTexture;
+        AVFormatContext* _formatContext;
+        int _videoStream;
+        int _audioStream;
+        AVFrame* _pFrame;  
+        AVFrame* _pFrameYUV;
+        AVCodec* _codec;
+        AVCodec* _audioCodec;
+        bool _paused;
     public:
         static const uint32_t VIDEO_PID_VAL;
         static const uint32_t AUDIO_PID_VAL;
@@ -29,6 +49,7 @@ class Player
         static const uint32_t ADAPTATION_ONLY_PAYLOAD;
         static const uint32_t ADAPTATION_BOTH;
         Player(Playlist*);
+        ~Player();
         bool playNext();
         friend void loadSegmentsThread(Player* player);
 };
