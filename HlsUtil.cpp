@@ -80,7 +80,7 @@ int HlsUtil::parseMasterPlaylist(std::string buffer)
 
 Playlist* HlsUtil::getPlaylistForBitrate(int bitrate)
 {
-        return this->masterPlaylist->getPlaylistForBitrate(bitrate);
+    return this->masterPlaylist->getPlaylistForBitrate(bitrate);
 }
 
 size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
