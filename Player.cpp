@@ -146,7 +146,6 @@ bool Player::playNext()
     }
     SDL_AudioSpec wantedSpec;
     SDL_AudioSpec audioSpec;
-
     if(current.getFname() == _tsVideo.at(0).getFname())
     {
         if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER))
