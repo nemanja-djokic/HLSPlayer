@@ -1,6 +1,14 @@
 #ifndef _TSVIDEO_H_
 #define _TSVIDEO_H_
 
+extern "C"
+{
+    #include "libavformat/avformat.h"
+    #include "SDL2/SDL_mutex.h"
+}
+
+#include "CustomIOContext.h"
+
 #include <vector>
 #include <cstdint>
 #include <string>
@@ -12,6 +20,8 @@ class TSVideo
         bool _hasData;
         std::string _fname;
         bool _isSaved;
+        AVFormatContext* _formatContext;
+        CustomIOContext* _ioCtx;
     public:
         TSVideo(std::string);
         inline bool isSaved(){return _isSaved;};
@@ -21,6 +31,8 @@ class TSVideo
         uint8_t* getPayload();
         void prepareFile();
         inline std::string getFname(){return _fname;};
+        void prepareFormatContext(AVFormatContext*);
+        inline AVFormatContext* getFormatContext(){return _formatContext;};
 };
 
 #endif

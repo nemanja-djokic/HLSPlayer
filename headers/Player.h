@@ -24,7 +24,6 @@ class Player
     private:
         Playlist* _playlist;
         void loadSegments();
-        void loadSegment(uint32_t);
         bool pollEvent(SDL_Event);
         std::vector<TSVideo> _tsVideo;
         std::vector<TSAudio> _tsAudio;
@@ -40,6 +39,10 @@ class Player
         AVCodec* _codec;
         AVCodec* _audioCodec;
         bool _paused;
+        int64_t _inChLayout;
+        SwrContext* _swrCtx;
+        struct SwsContext* _swsCtx;
+        SDL_Rect _sdlRect;
     public:
         static const uint32_t VIDEO_PID_VAL;
         static const uint32_t AUDIO_PID_VAL;
