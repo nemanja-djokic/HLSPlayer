@@ -27,17 +27,29 @@ static int64_t IOSeekFunc(void *data, int64_t pos, int whence) {
     return 0;
 }
 
+static int IOWriteFunc(void *data, uint8_t *buf, int buf_size)
+{
+	CustomIOContext *hctx = (CustomIOContext*)data;
+	uint8_t* helpBuffer = (uint8_t*)av_malloc(hctx->_bufferSize + buf_size);
+	memcpy(helpBuffer, hctx->_buffer, hctx->_bufferSize);
+	memcpy(helpBuffer, buf + hctx->_bufferSize, buf_size);
+	av_free(hctx->_buffer);
+	hctx->_buffer = helpBuffer;
+	return buf_size;
+}
+
 CustomIOContext::CustomIOContext(uint8_t* buffer, size_t size) {
 	_bufferSize = size;
-	_buffer = (uint8_t *)av_malloc(_bufferSize);
-	
+	_buffer = new uint8_t[_bufferSize];
+	_ioCtx = nullptr;
+	//_toDelete = _buffer;
 	memcpy(_buffer, buffer, _bufferSize);
 	_ioCtx = avio_alloc_context(
 				_buffer, _bufferSize,
 				0,
 				(void*)this,
 				IOReadFunc, 
-				0,
+				IOWriteFunc,
 				IOSeekFunc
 	);
 }

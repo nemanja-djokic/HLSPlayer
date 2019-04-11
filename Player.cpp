@@ -54,19 +54,22 @@ Player::~Player()
 void Player::loadSegments()
 {
     AVFormatContext* lastFormatContext = nullptr;
+    TSVideo* toInsertVideo = new TSVideo((*_playlist->getSegments())[_playlist->getSegments()->size() - 1].getEndpoint());
     for(unsigned int i = 0; i < (*_playlist->getSegments()).size(); i++)
     {
         (*_playlist->getSegments())[i].loadSegment();
         uint8_t* segmentPayload = (*_playlist->getSegments())[i].getTsData();
         size_t payloadSize = (*_playlist->getSegments())[i].loadedSize();
-        TSVideo toInsertVideo((*_playlist->getSegments())[i].getEndpoint());
         for(size_t j = 0; j < payloadSize / TS_BLOCK_SIZE; j++)
         {
-            toInsertVideo.appendData(segmentPayload + j * TS_BLOCK_SIZE, TS_BLOCK_SIZE);
+            toInsertVideo->appendData(segmentPayload + j * TS_BLOCK_SIZE, TS_BLOCK_SIZE, (i==0)?true:false, (j == 0)?true:false);
         }
-        toInsertVideo.prepareFile();
-        toInsertVideo.prepareFormatContext(lastFormatContext);
-        this->_tsVideo.push_back(toInsertVideo);
+        if(i == 0)
+        {
+            toInsertVideo->prepareFile();
+            toInsertVideo->prepareFormatContext(lastFormatContext);
+            this->_tsVideo.push_back(toInsertVideo);
+        }
     }
 }
 
@@ -121,7 +124,7 @@ bool Player::playNext()
     bool firstFrame = true;
     while(!(*this->_playlist->getSegments())[_currentPosition].getIsLoaded());
     while(_currentPosition >= this->_tsVideo.size());
-    TSVideo current = this->_tsVideo[_currentPosition];
+    TSVideo current = *this->_tsVideo[_currentPosition];
     _currentPosition++;
     _formatContext = current.getFormatContext();
     /*if(_formatContext == nullptr)
@@ -358,7 +361,7 @@ bool Player::playNext()
             audio_pos = audio_chunk;
             gotFirstAudio = true;
         }
-        av_free_packet(&packet);  
+        av_free_packet(&packet);
         if(!pollEvent(event))
             return false;
     }
@@ -367,7 +370,7 @@ bool Player::playNext()
     //avformat_close_input(&_formatContext);
     gotFirstVideo = false;
     gotFirstAudio = false;
-    if(current.getFname() == _tsVideo.at(_tsVideo.size() - 1).getFname())
+    if(current.getFname() == _tsVideo.at(_tsVideo.size() - 1)->getFname())
     {
         SDL_CloseAudio();
         return false;

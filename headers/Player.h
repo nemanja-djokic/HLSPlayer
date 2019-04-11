@@ -25,7 +25,7 @@ class Player
         Playlist* _playlist;
         void loadSegments();
         bool pollEvent(SDL_Event);
-        std::vector<TSVideo> _tsVideo;
+        std::vector<TSVideo*> _tsVideo;
         std::vector<TSAudio> _tsAudio;
         size_t _currentPosition;
         SDL_Window* _playerWindow;

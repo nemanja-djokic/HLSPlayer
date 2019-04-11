@@ -25,7 +25,7 @@ class TSVideo
     public:
         TSVideo(std::string);
         inline bool isSaved(){return _isSaved;};
-        void appendData(uint8_t*, size_t);
+        void appendData(uint8_t*, size_t, bool, bool);
         inline bool getHasData(){return _hasData;};
         inline size_t getSize(){return _videoPayload.size();};
         uint8_t* getPayload();
