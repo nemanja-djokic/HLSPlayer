@@ -76,12 +76,19 @@ void Player::loadSegments()
 static uint8_t *audio_chunk; 
 static uint32_t audio_len; 
 static uint8_t *audio_pos;
+static bool audio_clear = false;
 bool gotFirstVideo = false;
 bool gotFirstAudio = false;
 
-void  fill_audio(void* udata, uint8_t *stream, int len){
+void  fill_audio(void* udata, uint8_t *stream, int len)
+{
+    if(audio_clear)
+    {
+        SDL_ClearQueuedAudio(0);
+        audio_clear = false;
+    }
 	SDL_memset(stream, 0, len);
-	if(audio_len==0)
+	if(audio_len == 0)
 		return; 
 
 	len = ((uint32_t)len>audio_len ? audio_len : len);
@@ -91,7 +98,7 @@ void  fill_audio(void* udata, uint8_t *stream, int len){
 	audio_len -= len; 
 }
 
-bool Player::pollEvent(SDL_Event event)
+bool Player::pollEvent(SDL_Event event, TSVideo* actual)
 {
     SDL_PollEvent(&event);  
     switch(event.type)
@@ -110,6 +117,14 @@ bool Player::pollEvent(SDL_Event event)
                 {
                     _paused = !_paused;
                 }
+                else if(event.key.keysym.scancode == SDL_SCANCODE_LEFT)
+                {
+                    actual->seek(-2 * 1000000, SEEK_CUR);
+                }
+                else if(event.key.keysym.scancode == SDL_SCANCODE_RIGHT)
+                {
+                    actual->seek(2 * 1000000, SEEK_CUR);
+                }
             }
         default:  
             break;  
@@ -127,25 +142,10 @@ bool Player::playNext()
     TSVideo current = *this->_tsVideo[_currentPosition];
     _currentPosition++;
     _formatContext = current.getFormatContext();
-    /*if(_formatContext == nullptr)
-    {
-        _formatContext = nullptr;
-        if(avformat_open_input(&_formatContext, (std::string("/dev/shm/") + current.getFname()).c_str(), nullptr, nullptr) != 0)
-        {
-            std::cerr << "Format context failed" << std::endl;
-            return false;
-        }
-        if(avformat_find_stream_info(_formatContext, nullptr) < 0)
-        {
-            std::cerr << "Stream info failed" << std::endl;
-            return false;
-        }
-    }*/
 
 
     _formatContext->probesize = 32;
     _formatContext->max_analyze_duration = 32;
-    //av_dump_format(_formatContext, 0, "/dev/shm/tmp", 0);
 
     if(_videoStream == -1 || _audioStream == -1) {      
         for(unsigned int i = 0; i < _formatContext->nb_streams; i++)
@@ -199,7 +199,7 @@ bool Player::playNext()
         wantedSpec.format = AUDIO_S16;
         wantedSpec.channels = audioCodecContext->channels;
         wantedSpec.silence = 0;
-        wantedSpec.samples = 512;
+        wantedSpec.samples = 16;
         wantedSpec.callback = fill_audio;
         wantedSpec.userdata = audioCodecContext;
         if(SDL_OpenAudio(&wantedSpec, &audioSpec) < 0)
@@ -258,7 +258,6 @@ bool Player::playNext()
         _sdlRect.w = codecContext->width;  
         _sdlRect.h = codecContext->height;
     }
-    
     if(_playerWindow == nullptr)
     {
         _playerWindow = SDL_CreateWindow("HLSPlayer",  
@@ -291,11 +290,12 @@ bool Player::playNext()
     oinputDelay = endTicks - startTicks;
     int gotPicture;
     uint32_t videoDelay = 0;
+    uint32_t audioDelay = 0;
     while(av_read_frame(_formatContext, &packet) >= 0)
     {
         while(_paused)
         {
-            if(!pollEvent(event))
+            if(!pollEvent(event, &current))
                 return false;
         }
         uint32_t startTicks = SDL_GetTicks();
@@ -335,16 +335,19 @@ bool Player::playNext()
                     videoDelay -= (videoDelay > oinputDelay)?oinputDelay : videoDelay;
                     if(gotFirstAudio && gotFirstVideo)firstFrame = false;
                 }
+                videoDelay -= audioDelay;
+                audioDelay = 0;
                 SDL_Delay(videoDelay);
             }
         }
         else if(packet.stream_index == _audioStream && gotFirstVideo)
         {
+            uint32_t audioStartTicks = SDL_GetTicks();
             int ret = avcodec_decode_audio4(audioCodecContext, _pFrame, &gotPicture, &packet);
             if(ret < 0)
             {
                 std::cerr << "Error decoding audio" << std::endl;
-                return false;
+                continue;
             }
             int outBufferSize = av_samples_get_buffer_size(NULL,1 , audioCodecContext->frame_size, AV_SAMPLE_FMT_S16, 1);
             uint8_t* outBuffer = (uint8_t *)av_malloc(192000 * 2);
@@ -352,17 +355,36 @@ bool Player::playNext()
             {
                 swr_convert(_swrCtx, &outBuffer, 192000, (const uint8_t **)_pFrame->data, _pFrame->nb_samples);
             }
-            uint8_t* tempBuffer = (uint8_t*)av_malloc(audio_len + outBufferSize);
-            memcpy(tempBuffer, audio_pos, audio_len);
-            memcpy(tempBuffer + audio_len, outBuffer, outBufferSize);
-            av_free(audio_chunk);
-            audio_chunk = (uint8_t*)tempBuffer;
-			audio_len = audio_len + outBufferSize;
-            audio_pos = audio_chunk;
+            if(current.isResetAudio())
+            {
+                audio_clear = true;
+                std::cout << "Resetting audio" << std::endl;
+                uint8_t* tempBuffer = (uint8_t*)av_malloc(outBufferSize);
+                memcpy(tempBuffer, outBuffer, outBufferSize);
+                av_free(audio_chunk);
+                audio_chunk = (uint8_t*)tempBuffer;
+                audio_len = outBufferSize;
+                audio_pos = audio_chunk;
+                current.clearResetAudio();
+            }
+            else
+            {
+                uint8_t* tempBuffer = (uint8_t*)av_malloc(audio_len + outBufferSize);
+                memcpy(tempBuffer, audio_pos, audio_len);
+                memcpy(tempBuffer + audio_len, outBuffer, outBufferSize);
+                av_free(audio_chunk);
+                audio_chunk = (uint8_t*)tempBuffer;
+			    audio_len = audio_len + outBufferSize;
+                audio_pos = audio_chunk;
+            }
+            av_free(outBuffer);
             gotFirstAudio = true;
+            uint32_t audioEndTicks = SDL_GetTicks();
+            audioDelay = audioEndTicks - audioStartTicks;
+            SDL_Delay(audioDelay);
         }
         av_free_packet(&packet);
-        if(!pollEvent(event))
+        if(!pollEvent(event, &current))
             return false;
     }
     swr_free(&_swrCtx);   

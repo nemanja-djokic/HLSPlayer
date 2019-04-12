@@ -3,7 +3,6 @@
 
 #include "Playlist.h"
 #include "TSVideo.h"
-#include "TSAudio.h"
 #include <vector>
 
 extern "C"  
@@ -24,9 +23,8 @@ class Player
     private:
         Playlist* _playlist;
         void loadSegments();
-        bool pollEvent(SDL_Event);
+        bool pollEvent(SDL_Event, TSVideo*);
         std::vector<TSVideo*> _tsVideo;
-        std::vector<TSAudio> _tsAudio;
         size_t _currentPosition;
         SDL_Window* _playerWindow;
         SDL_Renderer* _playerRenderer;

@@ -33,6 +33,9 @@ class TSVideo
         inline std::string getFname(){return _fname;};
         void prepareFormatContext(AVFormatContext*);
         inline AVFormatContext* getFormatContext(){return _formatContext;};
+        void seek(int64_t, int64_t);
+        inline bool isResetAudio(){return _ioCtx->_resetAudio;};
+        inline void clearResetAudio(){_ioCtx->_resetAudio = false;};
 };
 
 #endif

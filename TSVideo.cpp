@@ -22,10 +22,10 @@ void TSVideo::appendData(uint8_t* buffer, size_t len, bool isFirst, bool wholeBl
     {
         uint8_t* helpBuffer = new uint8_t[_videoPayload.size()];
         std::copy(_videoPayload.begin(), _videoPayload.end(), helpBuffer);
-        if((unsigned char*)_ioCtx->_buffer == _ioCtx->_ioCtx->buffer)delete[] _ioCtx->_buffer;
-        //av_free(_ioCtx->_ioCtx->buffer);
-        _ioCtx->_buffer = helpBuffer;
-        _ioCtx->_bufferSize = _videoPayload.size();
+        this->_ioCtx->_videoBuffer = (uint8_t*)av_realloc(this->_ioCtx->_videoBuffer, _videoPayload.size());
+        memcpy(this->_ioCtx->_videoBuffer, helpBuffer, _videoPayload.size());
+        this->_ioCtx->_videoBufferSize = _videoPayload.size();
+        delete[] helpBuffer;
     }
 }
 
@@ -41,7 +41,10 @@ void TSVideo::prepareFile()
     size_t size = this->_videoPayload.size();
     uint8_t* payload = new uint8_t[size];
     std::copy(_videoPayload.begin(), _videoPayload.end(), payload);
-    this->_ioCtx = new CustomIOContext(payload, size);
+    this->_ioCtx = new CustomIOContext();
+    this->_ioCtx->_videoBuffer = (uint8_t*)av_malloc(_videoPayload.size());
+    memcpy(this->_ioCtx->_videoBuffer, payload, _videoPayload.size());
+    this->_ioCtx->_videoBufferSize = _videoPayload.size();
     delete[] payload;
 }
 
@@ -65,4 +68,10 @@ void TSVideo::prepareFormatContext(AVFormatContext* oldFormatContext)
         std::cerr << "Stream info failed" << std::endl;
         _formatContext = nullptr;
     }
+}
+
+void TSVideo::seek(int64_t offset, int64_t whence)
+{
+    if(this->_ioCtx != nullptr)
+        this->_ioCtx->_ioCtx->seek(this->_ioCtx, offset, whence);
 }

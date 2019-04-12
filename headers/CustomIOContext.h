@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <string>
+#include <vector>
 
 extern "C"  
 { 
@@ -19,13 +20,14 @@ extern "C"
 
 class CustomIOContext {
 public:
+    bool _resetAudio;
     AVIOContext* _ioCtx;
 	uint8_t* _buffer;
 	int _bufferSize;
+    uint8_t* _videoBuffer;
+    int _videoBufferSize;
     int32_t _pos;
-
-public:
-	CustomIOContext(uint8_t* buffer, size_t size);
+	CustomIOContext();
 	~CustomIOContext();
 	void initAVFormatContext(AVFormatContext *);
 };
