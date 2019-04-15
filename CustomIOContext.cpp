@@ -57,108 +57,85 @@ static int64_t IOSeekFunc(void *data, int64_t offset, int whence) {
 		}
 		else
 		{	
-			hctx->_pos += offset;
-			return hctx->_pos;
-			/*int64_t offsetToIframe = 0;
+			//hctx->_pos += offset;
+			//return hctx->_pos;
+			int64_t offsetToIframe = 0;
+			int64_t beginningOfTsBlock = -1;
 			bool foundIFrame = false;
 			bool gaveUp = false;
 			do
 			{
-				if(isH264iFrame(hctx->_videoBuffer + hctx->_pos + offset + offsetToIframe))
+				if(hctx->_videoBuffer[hctx->_pos + offset + offsetToIframe] == 0x47)
 				{
+					std::cout << "reading ts" << std::endl;
+					beginningOfTsBlock = hctx->_pos + offset + offsetToIframe;
+				}
+				if(beginningOfTsBlock != -1 && isH264iFrame(hctx->_videoBuffer + hctx->_pos + offset + offsetToIframe))
+				{
+					std::cout << "found iframe" << std::endl;
 					foundIFrame = true;
 				}
 				if(!foundIFrame)
 				{
-					offsetToIframe++;
-					if((hctx->_pos + offset + offsetToIframe) > (hctx->_bufferSize - 1))
+					if(offset > 0)
+					{
+						offsetToIframe++;
+					}
+					else
+					{
+						offsetToIframe--;
+					}
+					if((hctx->_pos + offset + offsetToIframe) > (hctx->_videoBufferSize - 1))
 					{
 						gaveUp = true;
+					}
+					else if((hctx->_pos + offset + offsetToIframe) < 0)
+					{
+						hctx->_pos = 0;
+						return 0;
 					}
 				}
 			}
 			while(!foundIFrame || gaveUp);
 			if(foundIFrame)
 			{
-				if(hctx->_pos + offset > hctx->_bufferSize)
+				if(beginningOfTsBlock < 0)
 				{
-					hctx->_pos = hctx->_bufferSize;
-					return -1;
+					hctx->_pos = 0;
 				}
-				offset += offsetToIframe;
-				std::cout << "off to iFrame:" << offsetToIframe << std::endl;
-				hctx->_pos += offset;
+				else if(beginningOfTsBlock > hctx->_videoBufferSize)
+				{
+					hctx->_pos = hctx->_videoBufferSize;
+				}
+				else
+				{
+					hctx->_pos = beginningOfTsBlock;
+					avio_flush(hctx->_ioCtx);
+				}
 				return hctx->_pos;
-			}*/
+			}
 		}
 	}
-	return -1;
-	//TODO: Rewrite after changing buffers
-	/*CustomIOContext *hctx = (CustomIOContext*)data;
-	if(hctx->_ioCtx == nullptr)
+	else if(whence == SEEK_SET)
 	{
-		std::cout << "_ioCtx nullptr" << std::endl;
-		return -1;
-	}
-	if(whence == SEEK_CUR)
-	{
-		if(hctx->_pos + offset > hctx->_bufferSize)
-		{
-			hctx->_pos = hctx->_bufferSize;
-			return hctx->_bufferSize;
-		}
-		else if(hctx->_pos + offset < 0)
+		if(offset < 0)
 		{
 			hctx->_pos = 0;
 			return 0;
 		}
+		else if(offset > hctx->_videoBufferSize)
+		{
+			hctx->_pos = hctx->_videoBufferSize;
+			return hctx->_pos;
+		}
 		else
 		{
-			//TODO: Clean this up. Segfaults
-			int64_t offsetToIframe = 0;
-			bool foundIFrame = false;
-			bool gaveUp = false;
-			do
-			{
-				if(isH264iFrame(hctx->_ioCtx->buffer + hctx->_pos + offset + offsetToIframe))
-				{
-					foundIFrame = true;
-				}
-				if(!foundIFrame)
-				{
-					offsetToIframe++;
-					if((hctx->_pos + offset + offsetToIframe) < 0 || (hctx->_pos + offset + offsetToIframe) > (hctx->_bufferSize - 1))
-					{
-						gaveUp = true;
-					}
-				}
-			}
-			while(!foundIFrame || gaveUp);
-			if(foundIFrame)
-			{
-				if(hctx->_pos + offset > hctx->_bufferSize)
-				{
-					hctx->_pos = hctx->_bufferSize;
-					return -1;
-				}
-				std::cout << "offset:" << offset << std::endl;
-				std::cout << "whence:" << whence << std::endl;
-				offset += offsetToIframe;
-				std::cout << "off to iFrame:" << offsetToIframe << std::endl;
-				return avio_seek(hctx->_ioCtx, offset, whence);
-			}
-			//std::cout << "offset:" << offset << std::endl;
-			//std::cout << "whence:" << whence << std::endl;
-			int64_t status = avio_seek(hctx->_ioCtx, offset, whence);
-			return status;
+			hctx->_pos = offset;
+			return offset;
 		}
-		return -1;
+		
 	}
-	else
-	{
-		hctx->_pos += offset;
-		return hctx->_pos;
-	}*/
+	return -1;
 }
 
 static int IOWriteFunc(void *data, uint8_t *buf, int buf_size)

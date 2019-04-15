@@ -19,6 +19,7 @@ const uint32_t Player::ADAPTATION_FIELD_MASK = 0x30;
 const uint32_t Player::ADAPTATION_NO_PAYLOAD = 0b10;
 const uint32_t Player::ADAPTATION_ONLY_PAYLOAD = 0b01;
 const uint32_t Player::ADAPTATION_BOTH = 0b11;
+const uint32_t Player::SAMPLE_CORRECTION_PERCENT_MAX = 35;
 
 Player::Player(Playlist* playlist)
 {
@@ -62,8 +63,9 @@ void Player::loadSegments()
         size_t payloadSize = (*_playlist->getSegments())[i].loadedSize();
         for(size_t j = 0; j < payloadSize / TS_BLOCK_SIZE; j++)
         {
-            toInsertVideo->appendData(segmentPayload + j * TS_BLOCK_SIZE, TS_BLOCK_SIZE, (i==0)?true:false, (j == 0)?true:false);
+            toInsertVideo->appendData(segmentPayload + j * TS_BLOCK_SIZE, TS_BLOCK_SIZE, (i==0)?true:false, (j == 0)?true:false, (*_playlist->getSegments())[i].getExtInf());
         }
+        toInsertVideo->sizeAccumulate();
         if(i == 0)
         {
             toInsertVideo->prepareFile();
@@ -79,6 +81,18 @@ static uint8_t *audio_pos;
 static bool audio_clear = false;
 bool gotFirstVideo = false;
 bool gotFirstAudio = false;
+
+double audioPts;
+int64_t audioPtsTime;
+double audioDiffCumulative = 0.0;
+double averageDifference = 0.0;
+int32_t diffCounter = 0;
+
+void refreshAudioTimer(AVPacket packet)
+{
+    audioPts = packet.pts;
+    audioPtsTime = (int64_t)(av_q2d(av_get_time_base_q()));
+}
 
 void  fill_audio(void* udata, uint8_t *stream, int len)
 {
@@ -96,6 +110,40 @@ void  fill_audio(void* udata, uint8_t *stream, int len)
 	SDL_MixAudio(stream, audio_pos, len, SDL_MIX_MAXVOLUME);
 	audio_pos += len; 
 	audio_len -= len; 
+}
+
+int synchronizeAudio(TSVideo* tsVideo, AVCodecContext* audioCodecContext, int samplesSize, double pts)
+{
+    int n;
+    double refClock;
+    n = 2 * audioCodecContext->channels;
+    double diff;
+    int wantedSize, minSize, maxSize;
+    refClock = tsVideo->getCurrentPTS();
+    diff = pts - refClock;
+    //std::cout << "absdif: " << abs(diff) << std::endl;
+    if(diff < 100)
+    {
+        diffCounter++;
+        audioDiffCumulative += diff;
+        averageDifference = audioDiffCumulative / diffCounter;
+        wantedSize = samplesSize;
+    }
+    else
+    {
+        diffCounter++;
+        audioDiffCumulative += diff;
+        averageDifference = audioDiffCumulative / diffCounter;
+        if(fabs(averageDifference) >= 100.0)
+        {
+            wantedSize = (samplesSize + ((int)(diff * audioCodecContext->sample_rate) * n)) / 10000;
+            minSize = (int)(samplesSize * ((100.0 - (double)Player::SAMPLE_CORRECTION_PERCENT_MAX) / 100.0));
+            maxSize = (int)(samplesSize * ((100.0 + (double)Player::SAMPLE_CORRECTION_PERCENT_MAX) / 100.0));
+            if(wantedSize < minSize) wantedSize = minSize;
+            else if(wantedSize > maxSize) wantedSize = maxSize;
+        }
+    }
+    return samplesSize;
 }
 
 bool Player::pollEvent(SDL_Event event, TSVideo* actual)
@@ -119,11 +167,11 @@ bool Player::pollEvent(SDL_Event event, TSVideo* actual)
                 }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_LEFT)
                 {
-                    actual->seek(-2 * 1000000, SEEK_CUR);
+                    actual->seek(-15, SEEK_CUR);
                 }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_RIGHT)
                 {
-                    actual->seek(2 * 1000000, SEEK_CUR);
+                    actual->seek(15, SEEK_CUR);
                 }
             }
         default:  
@@ -199,7 +247,7 @@ bool Player::playNext()
         wantedSpec.format = AUDIO_S16;
         wantedSpec.channels = audioCodecContext->channels;
         wantedSpec.silence = 0;
-        wantedSpec.samples = 16;
+        wantedSpec.samples = 128;
         wantedSpec.callback = fill_audio;
         wantedSpec.userdata = audioCodecContext;
         if(SDL_OpenAudio(&wantedSpec, &audioSpec) < 0)
@@ -230,6 +278,8 @@ bool Player::playNext()
         std::cerr << "Bad frame format" << std::endl;
         return false;  
     }
+    current.assignVideoCodec(codecContext);
+    current.assignAudioCodec(audioCodecContext);
 
     if(_swsCtx == nullptr)
     {
@@ -298,6 +348,7 @@ bool Player::playNext()
             if(!pollEvent(event, &current))
                 return false;
         }
+        SDL_LockMutex(current.getVideoPlayerMutex());
         uint32_t startTicks = SDL_GetTicks();
         if(packet.stream_index == _videoStream)
         {
@@ -338,10 +389,12 @@ bool Player::playNext()
                 videoDelay -= audioDelay;
                 audioDelay = 0;
                 SDL_Delay(videoDelay);
+                current.refreshTimer(packet);
             }
         }
-        else if(packet.stream_index == _audioStream && gotFirstVideo)
+        else if(packet.stream_index == _audioStream)
         {
+            refreshAudioTimer(packet);
             uint32_t audioStartTicks = SDL_GetTicks();
             int ret = avcodec_decode_audio4(audioCodecContext, _pFrame, &gotPicture, &packet);
             if(ret < 0)
@@ -359,7 +412,7 @@ bool Player::playNext()
             {
                 audio_clear = true;
                 std::cout << "Resetting audio" << std::endl;
-                uint8_t* tempBuffer = (uint8_t*)av_malloc(outBufferSize);
+                uint8_t* tempBuffer = (uint8_t*)av_mallocz(outBufferSize);
                 memcpy(tempBuffer, outBuffer, outBufferSize);
                 av_free(audio_chunk);
                 audio_chunk = (uint8_t*)tempBuffer;
@@ -369,9 +422,38 @@ bool Player::playNext()
             }
             else
             {
-                uint8_t* tempBuffer = (uint8_t*)av_malloc(audio_len + outBufferSize);
-                memcpy(tempBuffer, audio_pos, audio_len);
-                memcpy(tempBuffer + audio_len, outBuffer, outBufferSize);
+                uint32_t wantedSize = synchronizeAudio(&current, audioCodecContext, audio_len + outBufferSize ,packet.pts);
+                uint8_t* tempBuffer;
+                if(wantedSize == 0)
+                {
+                    std::cout << "wanted 0" << std::endl;
+                    uint8_t* tempBuffer = (uint8_t*)av_mallocz(outBufferSize);
+                    memcpy(tempBuffer, outBuffer, outBufferSize);
+                    //av_free(audio_chunk);
+                    audio_chunk = (uint8_t*)tempBuffer;
+                    audio_len = outBufferSize;
+                    audio_pos = audio_chunk;
+                }
+                else if(wantedSize < audio_len + outBufferSize)
+                {
+                    std::cout << "adjusting " << (audio_len + outBufferSize) << " to " << wantedSize << std::endl;
+                    tempBuffer = (uint8_t*)av_mallocz(wantedSize);
+                    if(wantedSize < audio_len)
+                    {
+                        memcpy(tempBuffer, audio_pos, wantedSize);
+                    }
+                    else
+                    {
+                        memcpy(tempBuffer, audio_pos, audio_len);
+                        memcpy(tempBuffer + audio_len, outBuffer, wantedSize - audio_len);
+                    }
+                }
+                else
+                {
+                    tempBuffer = (uint8_t*)av_malloc(audio_len + outBufferSize);
+                    memcpy(tempBuffer, audio_pos, audio_len);
+                    memcpy(tempBuffer + audio_len, outBuffer, outBufferSize);
+                }
                 av_free(audio_chunk);
                 audio_chunk = (uint8_t*)tempBuffer;
 			    audio_len = audio_len + outBufferSize;
@@ -383,13 +465,13 @@ bool Player::playNext()
             audioDelay = audioEndTicks - audioStartTicks;
             SDL_Delay(audioDelay);
         }
+        SDL_UnlockMutex(current.getVideoPlayerMutex());
         av_free_packet(&packet);
         if(!pollEvent(event, &current))
             return false;
     }
     swr_free(&_swrCtx);   
-    avcodec_close(codecContext);  
-    //avformat_close_input(&_formatContext);
+    avcodec_close(codecContext);
     gotFirstVideo = false;
     gotFirstAudio = false;
     if(current.getFname() == _tsVideo.at(_tsVideo.size() - 1)->getFname())

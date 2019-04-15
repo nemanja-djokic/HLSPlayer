@@ -49,6 +49,7 @@ class Player
         static const uint32_t ADAPTATION_NO_PAYLOAD;
         static const uint32_t ADAPTATION_ONLY_PAYLOAD;
         static const uint32_t ADAPTATION_BOTH;
+        static const uint32_t SAMPLE_CORRECTION_PERCENT_MAX;
         Player(Playlist*);
         ~Player();
         bool playNext();
