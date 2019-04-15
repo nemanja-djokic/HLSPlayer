@@ -121,7 +121,6 @@ int synchronizeAudio(TSVideo* tsVideo, AVCodecContext* audioCodecContext, int sa
     int wantedSize, minSize, maxSize;
     refClock = tsVideo->getCurrentPTS();
     diff = pts - refClock;
-    //std::cout << "absdif: " << abs(diff) << std::endl;
     if(diff < 100)
     {
         diffCounter++;
