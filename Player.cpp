@@ -356,7 +356,6 @@ bool Player::playNext()
             avcodec_decode_video2(codecContext, _pFrame, &frameFinished, &packet);
             if(frameFinished)
             {
-                gotFirstVideo = true;
                 if(gotFirstVideo && gotFirstAudio)
                 {
                     sws_scale(  
@@ -374,6 +373,7 @@ bool Player::playNext()
                     SDL_RenderCopy(_playerRenderer, _playerTexture, &_sdlRect, &_sdlRect);  
                     SDL_RenderPresent(_playerRenderer);
                 }
+                gotFirstVideo = true;
             }
             
             if(frameFinished)
@@ -395,7 +395,6 @@ bool Player::playNext()
         else if(packet.stream_index == _audioStream)
         {
             refreshAudioTimer(packet);
-            uint32_t audioStartTicks = SDL_GetTicks();
             int ret = avcodec_decode_audio4(audioCodecContext, _pFrame, &gotPicture, &packet);
             if(ret < 0)
             {
@@ -426,10 +425,9 @@ bool Player::playNext()
                 uint8_t* tempBuffer;
                 if(wantedSize == 0)
                 {
-                    std::cout << "wanted 0" << std::endl;
                     uint8_t* tempBuffer = (uint8_t*)av_mallocz(outBufferSize);
                     memcpy(tempBuffer, outBuffer, outBufferSize);
-                    //av_free(audio_chunk);
+                    avcodec_flush_buffers(audioCodecContext);
                     audio_chunk = (uint8_t*)tempBuffer;
                     audio_len = outBufferSize;
                     audio_pos = audio_chunk;
@@ -438,6 +436,7 @@ bool Player::playNext()
                 {
                     std::cout << "adjusting " << (audio_len + outBufferSize) << " to " << wantedSize << std::endl;
                     tempBuffer = (uint8_t*)av_mallocz(wantedSize);
+                    avcodec_flush_buffers(audioCodecContext);
                     if(wantedSize < audio_len)
                     {
                         memcpy(tempBuffer, audio_pos, wantedSize);
@@ -461,9 +460,6 @@ bool Player::playNext()
             }
             av_free(outBuffer);
             gotFirstAudio = true;
-            uint32_t audioEndTicks = SDL_GetTicks();
-            audioDelay = audioEndTicks - audioStartTicks;
-            SDL_Delay(audioDelay);
         }
         SDL_UnlockMutex(current.getVideoPlayerMutex());
         av_free_packet(&packet);

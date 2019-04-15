@@ -138,7 +138,7 @@ void TSVideo::seek(int64_t offset, int64_t whence)
             else if(offset > 0)
             {
                 double toSeek = (double)offset;
-                toSeek -= currentBlockElapsed;
+                toSeek += currentBlockElapsed;
                 int posOfEndBlock = pos;
                 while((uint32_t)posOfEndBlock < this->_tsBlockBegin->size() && toSeek > 0)
                 {
@@ -150,7 +150,7 @@ void TSVideo::seek(int64_t offset, int64_t whence)
                 {
                     posOfEndBlock = this->_tsBlockBegin->size() - 1;
                 }
-                else if(toSeek > 0 && fabs(toSeek) > (this->_tsBlockDuration->at(posOfEndBlock)) 
+                else if(toSeek > 0 && fabs(toSeek) < (this->_tsBlockDuration->at(posOfEndBlock)) 
                 && fabs(toSeek) > (this->_tsBlockDuration->at(posOfEndBlock)/2))
                 {
                     posOfEndBlock+=1;
