@@ -12,6 +12,7 @@ extern "C"
     #include "libswscale/swscale.h"  
     #include "libavdevice/avdevice.h"
     #include "libswresample/swresample.h"
+    #include "libavutil/time.h"
     
     #include "SDL2/SDL.h"  
     #include "SDL2/SDL_thread.h"

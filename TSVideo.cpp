@@ -1,4 +1,10 @@
 #include "headers/TSVideo.h"
+
+extern "C"
+{
+    #include "libavutil/time.h"
+}
+
 #include <fstream>
 #include <ios>
 #include <iostream>
@@ -17,6 +23,8 @@ TSVideo::TSVideo(std::string fname)
     _tsBlockSize = new std::vector<int32_t>();
     _blockBufferSize = 0;
     _videoPlayerMutex = SDL_CreateMutex();
+    _differenceCumulative = 0.0;
+    _differenceCounter = 0;
 }
 
 TSVideo::~TSVideo()
@@ -191,4 +199,62 @@ double TSVideo::getVideoClock()
     double delta;
     delta = ( (int64_t)(av_q2d(av_get_time_base_q())) - this->_currentPtsTime ) / 1000000.0;
     return this->_currentPtsTime + delta;
+}
+
+double TSVideo::getExternalClock()
+{
+    return av_gettime() / 1000000.0;
+}
+
+double TSVideo::synchronizeVideo(AVFrame* sourceFrame, double pts)
+{
+    double frameDelay;
+    if(pts != 0)
+    {
+        this->_currentPts = pts;
+    }
+    else
+    {
+        pts = this->_currentPts;
+    }
+    frameDelay = av_q2d(this->_videoCodec->time_base);
+    frameDelay += sourceFrame->repeat_pict * (frameDelay * 0.5);
+    this->_currentPts += frameDelay;
+    return pts;
+}
+
+int32_t TSVideo::synchronizeAudio(uint32_t samplesSize, double pts)
+{
+    int n;
+    double refClock;
+    n = 2 * this->_audioCodec->channels;
+
+    double diff, avgDiff;
+    int wantedSize, minSize, maxSize, nbSamples;
+
+    minSize = samplesSize / 2;
+    maxSize = samplesSize * 1.5;
+
+    refClock = getExternalClock();
+    diff = (this->_currentPts - pts) / 1000;
+
+    _differenceCumulative += diff;
+    _differenceCounter++;
+
+    if(fabs(_differenceCumulative) < 150)
+    {
+        wantedSize = samplesSize;
+    }
+    else
+    {
+        int32_t samplesDifference = (_differenceCumulative * this->_audioCodec->sample_rate) / 1000;
+        std::cout << "sSize: " << samplesSize << std::endl;
+        std::cout << "sDiff: " << samplesDifference << std::endl;
+        wantedSize = samplesSize - samplesDifference;
+        wantedSize = (wantedSize > maxSize)?maxSize : wantedSize;
+        wantedSize = (wantedSize < minSize)?minSize : wantedSize;
+        _differenceCumulative = -diff;
+        _differenceCounter = 0;
+    }
+    return wantedSize;
 }

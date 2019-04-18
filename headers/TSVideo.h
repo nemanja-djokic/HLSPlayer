@@ -27,6 +27,8 @@ class TSVideo
         std::vector<int32_t>* _tsBlockSize;
         uint32_t _blockBufferSize;
         SDL_mutex* _videoPlayerMutex;
+        double _differenceCumulative;
+        int32_t _differenceCounter;
         AVCodecContext* _videoCodec;
         AVCodecContext* _audioCodec;
         AVFormatContext* _formatContext;
@@ -50,6 +52,9 @@ class TSVideo
         inline int64_t getCurrentPTSTime(){return _currentPtsTime;};
         void refreshTimer(AVPacket);
         double getVideoClock();
+        double getExternalClock();
+        double synchronizeVideo(AVFrame*, double);
+        int32_t synchronizeAudio(uint32_t, double);
         void sizeAccumulate();
         inline SDL_mutex* getVideoPlayerMutex(){return _videoPlayerMutex;};
         inline void assignVideoCodec(AVCodecContext* videoCodec){_videoCodec = videoCodec;};
