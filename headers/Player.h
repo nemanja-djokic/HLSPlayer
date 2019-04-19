@@ -33,7 +33,6 @@ class Player
         AVFormatContext* _formatContext;
         int _videoStream;
         int _audioStream;
-        AVFrame* _pFrame;  
         AVFrame* _pFrameYUV;
         AVCodec* _codec;
         AVCodec* _audioCodec;

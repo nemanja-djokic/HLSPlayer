@@ -29,6 +29,7 @@ TSVideo::TSVideo(std::string fname)
 
 TSVideo::~TSVideo()
 {
+    std::cout << "Called TSVideo DTOR" << std::endl;
     delete _tsBlockBegin;
     delete _tsBlockDuration;
     delete _tsBlockSize;
@@ -56,7 +57,16 @@ void TSVideo::appendData(uint8_t* buffer, size_t len, bool isFirst, bool wholeBl
         this->_tsBlockBegin->push_back(_ioCtx->_videoBufferSize);
         delete[] helpBuffer;
     }
-    
+}
+
+void TSVideo::appendAudio(uint8_t* buffer, size_t len)
+{
+    uint8_t* helpBuffer = (uint8_t*)av_malloc(_ioCtx->_audioBufferSize + len);
+    memcpy(helpBuffer, _ioCtx->_audioBuffer, _ioCtx->_audioBufferSize);
+    memcpy(helpBuffer + _ioCtx->_audioBufferSize, buffer, len);
+    av_free(_ioCtx->_audioBuffer);
+    _ioCtx->_audioBuffer = helpBuffer;
+    _ioCtx->_audioBufferSize += len;
 }
 
 void TSVideo::sizeAccumulate()
@@ -119,8 +129,6 @@ void TSVideo::seek(int64_t offset, int64_t whence)
             double currentBlockDuration = this->_tsBlockDuration->at(pos);
             double currentBlockElapsed = ((double)(this->_ioCtx->_pos - this->_tsBlockBegin->at(pos)) / (double)this->_tsBlockSize->at(pos))
             * this->_tsBlockDuration->at(pos);
-            std::cout << "duration:" << currentBlockDuration << std::endl;
-            std::cout << "elapsed:" << currentBlockElapsed << std::endl;
             if(offset < 0)
             {
                 double toSeek = (double)offset;
@@ -236,7 +244,7 @@ int32_t TSVideo::synchronizeAudio(uint32_t samplesSize, double pts)
     maxSize = samplesSize * 1.5;
 
     refClock = getExternalClock();
-    diff = (this->_currentPts - pts) / 1000;
+    diff = (this->_currentPts - pts) / 10000;
 
     _differenceCumulative += diff;
     _differenceCounter++;
@@ -248,12 +256,10 @@ int32_t TSVideo::synchronizeAudio(uint32_t samplesSize, double pts)
     else
     {
         int32_t samplesDifference = (_differenceCumulative * this->_audioCodec->sample_rate) / 1000;
-        std::cout << "sSize: " << samplesSize << std::endl;
-        std::cout << "sDiff: " << samplesDifference << std::endl;
         wantedSize = samplesSize - samplesDifference;
         wantedSize = (wantedSize > maxSize)?maxSize : wantedSize;
         wantedSize = (wantedSize < minSize)?minSize : wantedSize;
-        _differenceCumulative = -diff;
+        _differenceCumulative = 0;
         _differenceCounter = 0;
     }
     return wantedSize;

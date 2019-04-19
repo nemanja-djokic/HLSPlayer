@@ -27,6 +27,15 @@ public:
     uint8_t* _videoBuffer;
     int _videoBufferSize;
     int32_t _pos;
+
+    double _videoPts;
+    double _audioPts;
+    int32_t _syncOffset;
+
+    uint8_t* _audioBuffer;
+    int _audioBufferSize;
+    int32_t _audioPos;
+
 	CustomIOContext();
 	~CustomIOContext();
 	void initAVFormatContext(AVFormatContext *);

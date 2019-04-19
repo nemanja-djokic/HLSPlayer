@@ -12,6 +12,7 @@ extern "C"
 #include <vector>
 #include <cstdint>
 #include <string>
+#include <iostream>
 
 class TSVideo
 {
@@ -38,6 +39,7 @@ class TSVideo
         ~TSVideo();
         inline bool isSaved(){return _isSaved;};
         void appendData(uint8_t*, size_t, bool, bool, double);
+        void appendAudio(uint8_t*, size_t);
         inline bool getHasData(){return _hasData;};
         inline size_t getSize(){return _videoPayload.size();};
         uint8_t* getPayload();
@@ -57,8 +59,11 @@ class TSVideo
         int32_t synchronizeAudio(uint32_t, double);
         void sizeAccumulate();
         inline SDL_mutex* getVideoPlayerMutex(){return _videoPlayerMutex;};
+        inline CustomIOContext* getCustomIOContext(){return _ioCtx;};
         inline void assignVideoCodec(AVCodecContext* videoCodec){_videoCodec = videoCodec;};
         inline void assignAudioCodec(AVCodecContext* audioCodec){_audioCodec = audioCodec;};
+        inline void setVideoPts(double videoPts){_ioCtx->_videoPts = videoPts;};
+        inline void setAudioPts(double audioPts){_ioCtx->_audioPts = audioPts;};
 };
 
 #endif

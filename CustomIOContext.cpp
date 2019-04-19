@@ -5,7 +5,8 @@ extern "C"
 }
 #include <iostream>
 
-static int IOReadFunc(void *data, uint8_t *buf, int buf_size) {
+static int IOReadFunc(void *data, uint8_t *buf, int buf_size)
+{
 	CustomIOContext *hctx = (CustomIOContext*)data;
 	if (hctx->_pos >= hctx->_videoBufferSize)
     {
@@ -35,7 +36,8 @@ static bool isH264iFrame(uint8_t* paket)
     return false;
 }
 
-static int64_t IOSeekFunc(void *data, int64_t offset, int whence) {
+static int64_t IOSeekFunc(void *data, int64_t offset, int whence)
+{
 	CustomIOContext* hctx = (CustomIOContext*)data;
 	if(hctx->_ioCtx == nullptr)
 	{
@@ -56,9 +58,8 @@ static int64_t IOSeekFunc(void *data, int64_t offset, int whence) {
 			return 0;
 		}
 		else
-		{	
-			//hctx->_pos += offset;
-			//return hctx->_pos;
+		{
+			//TODO: Not working, maybe fix later
 			int64_t offsetToIframe = 0;
 			int64_t beginningOfTsBlock = -1;
 			bool foundIFrame = false;
@@ -141,21 +142,43 @@ static int64_t IOSeekFunc(void *data, int64_t offset, int whence) {
 static int IOWriteFunc(void *data, uint8_t *buf, int buf_size)
 {
 	return -1;
-	//Useless
-	/*CustomIOContext *hctx = static_cast<CustomIOContext*>(data);
-	uint8_t* helpBuffer = (uint8_t*)av_malloc(hctx->_bufferSize + buf_size);
-	memcpy(helpBuffer, hctx->_buffer, hctx->_bufferSize);
-	memcpy(helpBuffer, buf + hctx->_bufferSize, buf_size);
-	av_free(hctx->_buffer);
-	hctx->_buffer = helpBuffer;
-	return buf_size;*/
+}
+
+int AudioReadFunc(void *data, uint8_t *buf, int buf_size)
+{
+	CustomIOContext *hctx = (CustomIOContext*)data;
+	if(buf_size == 0)
+	{
+		return 0;
+	}
+	if (hctx->_audioPos >= hctx->_audioBufferSize)
+	{
+		return AVERROR_EOF;
+	}
+	int32_t toRead = buf_size;
+	toRead = (toRead < (hctx->_audioBufferSize - hctx->_audioPos))?toRead:(hctx->_audioBufferSize - hctx->_audioPos);
+	if(toRead <= 0)
+		return 0;
+
+	memset(buf, 0, buf_size);
+	SDL_MixAudio(buf, hctx->_audioBuffer + hctx->_audioPos, buf_size, SDL_MIX_MAXVOLUME);
+	//memcpy(buf, hctx->_audioBuffer + hctx->_audioPos, toRead);
+	hctx->_audioPos += toRead;
+	return toRead;
 }
 
 CustomIOContext::CustomIOContext() {
 	_videoBuffer = nullptr;
-	_resetAudio = false;
+	_audioBuffer = nullptr;
+	_resetAudio = true;
 	_videoBufferSize = 0;
+	_audioBufferSize = 0;
 	_bufferSize = 16384;
+	_pos = 0;
+	_audioPos = 0;
+	_audioPts = 0.0;
+	_videoPts = 0.0;
+	_syncOffset = 0;
 	_buffer = (uint8_t*)av_malloc(_bufferSize);
 	_ioCtx = nullptr;
 	_ioCtx = avio_alloc_context(
@@ -171,6 +194,7 @@ CustomIOContext::CustomIOContext() {
 CustomIOContext::~CustomIOContext()
 {
 	av_free(_buffer);
+	av_free(_videoBuffer);
 	av_free(_ioCtx);
 }
 

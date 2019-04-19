@@ -7,6 +7,8 @@
 #include <thread>
 #include <cassert>
 
+void AudioReadFunc(void*, uint8_t*, int);
+
 void loadSegmentsThread(Player* player)
 {
     player->loadSegments();
@@ -39,7 +41,6 @@ Player::Player(Playlist* playlist)
     _swsCtx = nullptr;
     _videoStream = -1;
     _audioStream = -1;
-    _pFrame = av_frame_alloc();  
     _pFrameYUV = av_frame_alloc();
     
     std::thread(loadSegmentsThread, this).detach();
@@ -48,7 +49,6 @@ Player::Player(Playlist* playlist)
 
 Player::~Player()
 {
-    av_free(_pFrame);  
     av_free(_pFrameYUV);
 }
 
@@ -87,6 +87,8 @@ int64_t audioPtsTime;
 double audioDiffCumulative = 0.0;
 double averageDifference = 0.0;
 int32_t diffCounter = 0;
+
+bool playbackCompleted = false;
 
 void refreshAudioTimer(AVPacket packet)
 {
@@ -139,6 +141,107 @@ bool Player::pollEvent(SDL_Event event, TSVideo* actual)
             break;  
     }
     return true;
+}
+
+SDL_semaphore* videoSemaphore = SDL_CreateSemaphore(0);
+SDL_semaphore* audioSemaphore = SDL_CreateSemaphore(0);
+
+volatile bool videoProcessedBlock = false;
+volatile bool audioProcessedBlock = false;
+
+volatile bool videoThreadRunning = true;
+volatile bool audioThreadRunning = true;
+
+
+
+
+void audioThreadFunction(AVPacket packet, AVCodecContext* audioCodecContext, int* gotPicture, TSVideo* current, SwrContext* _swrCtx)
+{
+    AVFrame* _pFrame = av_frame_alloc();
+    while(audioThreadRunning)
+    {
+        SDL_SemWait(audioSemaphore);
+        if(!audioThreadRunning)
+            return;
+        refreshAudioTimer(packet);
+        int ret = avcodec_decode_audio4(audioCodecContext, _pFrame, gotPicture, &packet);
+        if(ret < 0)
+        {
+            std::cerr << "Error decoding audio" << std::endl;
+            return;
+        }
+        current->setAudioPts(packet.pts);
+        int outBufferSize = av_samples_get_buffer_size(NULL, audioCodecContext->channels, audioCodecContext->frame_size, AV_SAMPLE_FMT_S16, 1);
+        uint8_t* outBuffer = (uint8_t *)av_mallocz(outBufferSize * audioCodecContext->channels);
+        if(gotPicture > 0)
+        {
+            swr_convert(_swrCtx, &outBuffer, outBufferSize, (const uint8_t **)_pFrame->data, _pFrame->nb_samples);
+        }
+            
+        if(current->isResetAudio())
+        {
+            audio_clear = true;
+            std::cout << "Resetting audio" << std::endl;
+            uint8_t* tempBuffer = (uint8_t*)av_mallocz(outBufferSize);
+            memcpy(tempBuffer, outBuffer, outBufferSize);
+            av_free(audio_chunk);
+            audio_chunk = (uint8_t*)tempBuffer;
+            audio_len = outBufferSize;
+            audio_pos = audio_chunk;
+            current->clearResetAudio();
+        }
+        else
+        {
+            uint32_t wantedSize = current->synchronizeAudio(audio_len + outBufferSize ,packet.pts);
+            uint8_t* tempBuffer;
+            tempBuffer = (uint8_t*)av_mallocz(audio_len + outBufferSize);
+            memcpy(tempBuffer, audio_pos, audio_len);
+            memcpy(tempBuffer + audio_len, outBuffer, outBufferSize);
+            av_free(audio_chunk);
+            audio_chunk = (uint8_t*)tempBuffer;
+		    audio_len = audio_len + outBufferSize;
+            audio_pos = audio_chunk;
+        }
+        av_free(outBuffer);
+        gotFirstAudio = true;
+        audioProcessedBlock = true;
+    }
+}
+
+void videoThreadFunction(AVCodecContext* codecContext, AVPacket packet, SwsContext* _swsCtx, AVFrame* _pFrameYUV,
+    SDL_Texture* _playerTexture, SDL_Rect* _sdlRect, SDL_Renderer* _playerRenderer, TSVideo* current)
+{
+    AVFrame* _pFrame = av_frame_alloc();
+    while(videoThreadRunning)
+    {
+        SDL_SemWait(videoSemaphore);
+        if(!videoThreadRunning)
+            return;
+        int frameFinished;
+        avcodec_decode_video2(codecContext, _pFrame, &frameFinished, &packet);
+        if(frameFinished)
+        {
+            sws_scale(  
+            _swsCtx,  
+            (uint8_t const * const *)_pFrame->data,  
+            _pFrame->linesize,  
+            0,  
+            codecContext->height,
+            _pFrameYUV->data,
+            _pFrameYUV->linesize
+            );
+            SDL_UpdateTexture(_playerTexture, _sdlRect, _pFrameYUV->data[0], _pFrameYUV->linesize[0]);  
+            SDL_RenderClear(_playerRenderer);  
+            SDL_RenderCopy(_playerRenderer, _playerTexture, _sdlRect, _sdlRect);  
+            SDL_RenderPresent(_playerRenderer);
+            current->refreshTimer(packet);
+            int32_t delay = ((_pFrame->pkt_duration * 10) - (packet.pts - packet.dts)) / 900;
+            delay = (delay < 0)?0:delay;
+            std::cout << "delay:" << delay << std::endl;
+            SDL_Delay(delay);
+        }
+        videoProcessedBlock = true;
+    }
 }
 
 bool Player::playNext()
@@ -205,9 +308,9 @@ bool Player::playNext()
         wantedSpec.format = AUDIO_S16;
         wantedSpec.channels = audioCodecContext->channels;
         wantedSpec.silence = 0;
-        wantedSpec.samples = 128;
+        wantedSpec.samples = 2048;
         wantedSpec.callback = fill_audio;
-        wantedSpec.userdata = audioCodecContext;
+        wantedSpec.userdata = current.getCustomIOContext();
         if(SDL_OpenAudio(&wantedSpec, &audioSpec) < 0)
         {
             std::cerr << "SDL_OpenAudio " << SDL_GetError() << std::endl;
@@ -293,8 +396,11 @@ bool Player::playNext()
     }
     AVPacket packet;  
     SDL_Event event;
-
-    int gotPicture;
+    int gotPicture = 0;
+    std::thread videoThread = std::thread(videoThreadFunction, codecContext, packet, _swsCtx, _pFrameYUV, _playerTexture, &_sdlRect, _playerRenderer, &current);
+    std::thread audioThread = std::thread(audioThreadFunction, packet, audioCodecContext, &gotPicture, &current, _swrCtx);
+    videoThread.detach();
+    audioThread.detach();
     while(av_read_frame(_formatContext, &packet) >= 0)
     {
         while(_paused)
@@ -305,94 +411,32 @@ bool Player::playNext()
         SDL_LockMutex(current.getVideoPlayerMutex());
         if(packet.stream_index == _videoStream)
         {
-            int frameFinished;
-            avcodec_decode_video2(codecContext, _pFrame, &frameFinished, &packet);
-            if(frameFinished)
-            {
-                int32_t delay = ((_pFrame->pkt_duration * 10) - (packet.pts - packet.dts)) / 900;
-                delay = (delay < 0)?0:delay;
-                current.synchronizeVideo(_pFrame, packet.dts);
-                SDL_Delay(delay);
-                sws_scale(  
-                _swsCtx,  
-                (uint8_t const * const *)_pFrame->data,  
-                _pFrame->linesize,  
-                0,  
-                codecContext->height,
-                _pFrameYUV->data,
-                _pFrameYUV->linesize
-                );
-                SDL_UpdateTexture(_playerTexture, &_sdlRect, _pFrameYUV->data[0], _pFrameYUV->linesize[0]);  
-                SDL_RenderClear(_playerRenderer);  
-                SDL_RenderCopy(_playerRenderer, _playerTexture, &_sdlRect, &_sdlRect);  
-                SDL_RenderPresent(_playerRenderer);
-                current.refreshTimer(packet);
-            }
+            SDL_SemPost(videoSemaphore);
+            while(!videoProcessedBlock);
+            videoProcessedBlock = false;
+            //videoThreadFunction(codecContext, _pFrame, &packet, _swsCtx, _pFrameYUV, _playerTexture, &_sdlRect, _playerRenderer, &current);
         }
         else if(packet.stream_index == _audioStream)
         {
-            refreshAudioTimer(packet);
-            int ret = avcodec_decode_audio4(audioCodecContext, _pFrame, &gotPicture, &packet);
-            if(ret < 0)
-            {
-                std::cerr << "Error decoding audio" << std::endl;
-                continue;
-            }
-            int outBufferSize = av_samples_get_buffer_size(NULL, 1, audioCodecContext->frame_size, AV_SAMPLE_FMT_S16, 1);
-            uint8_t* outBuffer = (uint8_t *)av_malloc(outBufferSize * audioCodecContext->channels);
-            if(gotPicture > 0)
-            {
-                swr_convert(_swrCtx, &outBuffer, 192000, (const uint8_t **)_pFrame->data, _pFrame->nb_samples);
-            }
-            if(current.isResetAudio())
-            {
-                audio_clear = true;
-                std::cout << "Resetting audio" << std::endl;
-                uint8_t* tempBuffer = (uint8_t*)av_mallocz(outBufferSize);
-                memcpy(tempBuffer, outBuffer, outBufferSize);
-                av_free(audio_chunk);
-                audio_chunk = (uint8_t*)tempBuffer;
-                audio_len = outBufferSize;
-                audio_pos = audio_chunk;
-                current.clearResetAudio();
-            }
-            else
-            {
-                uint32_t wantedSize = current.synchronizeAudio(audio_len + outBufferSize ,packet.pts);
-                uint8_t* tempBuffer;
-                tempBuffer = (uint8_t*)av_mallocz(audio_len + outBufferSize);
-                memcpy(tempBuffer, audio_pos, audio_len);
-                memcpy(tempBuffer + audio_len, outBuffer, outBufferSize);
-                memset(tempBuffer + wantedSize, 0, (audio_len + outBufferSize) - wantedSize);
-                av_free(audio_chunk);
-                audio_chunk = (uint8_t*)tempBuffer;
-                if(wantedSize < audio_len + outBufferSize)
-                {
-                    int32_t sizeDiff = (audio_len + outBufferSize) - wantedSize;
-                    audio_len = wantedSize;
-                    audio_pos = audio_chunk;
-                    //TODO: Its syncing but its making random noise
-                }
-                else if(wantedSize > audio_len + outBufferSize)
-                {
-                    std::cout << "Should correct" << std::endl;
-                }
-                else
-                {
-			        audio_len = audio_len + outBufferSize;
-                    audio_pos = audio_chunk;
-                }
-            }
-            av_free(outBuffer);
-            gotFirstAudio = true;
+            SDL_SemPost(audioSemaphore);
+            while(!audioProcessedBlock);
+            videoProcessedBlock = false;
+            //std::cout << "audio packet" << std::endl;
+            //audioThreadFunction(packet, _pFrame, audioCodecContext, &gotPicture, &current, _swrCtx);
         }
         SDL_UnlockMutex(current.getVideoPlayerMutex());
         av_free_packet(&packet);
         if(!pollEvent(event, &current))
             return false;
     }
+
+    while(!playbackCompleted);
+    videoThreadRunning = false;
+    audioThreadRunning = false;
+
     swr_free(&_swrCtx);   
     avcodec_close(codecContext);
+    std::cout << "HERE" << std::endl;
     gotFirstVideo = false;
     gotFirstAudio = false;
     if(current.getFname() == _tsVideo.at(_tsVideo.size() - 1)->getFname())
