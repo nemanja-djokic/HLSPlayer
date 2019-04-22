@@ -13,6 +13,7 @@ extern "C"
 #include <cstdint>
 #include <string>
 #include <iostream>
+#include <queue>
 
 class TSVideo
 {
@@ -28,8 +29,12 @@ class TSVideo
         std::vector<int32_t>* _tsBlockSize;
         uint32_t _blockBufferSize;
         SDL_mutex* _videoPlayerMutex;
+        SDL_mutex* _videoQueueMutex;
+        SDL_mutex* _audioQueueMutex;
         double _differenceCumulative;
         int32_t _differenceCounter;
+        std::queue<AVPacket>* _videoQueue;
+        std::queue<AVPacket>* _audioQueue;
         AVCodecContext* _videoCodec;
         AVCodecContext* _audioCodec;
         AVFormatContext* _formatContext;
@@ -48,8 +53,15 @@ class TSVideo
         void prepareFormatContext(AVFormatContext*);
         inline AVFormatContext* getFormatContext(){return _formatContext;};
         void seek(int64_t, int64_t);
+        void finalizeLoading();
         inline bool isResetAudio(){return _ioCtx->_resetAudio;};
         inline void clearResetAudio(){_ioCtx->_resetAudio = false;};
+        inline void clearAudioPackets()
+        {
+            while(_audioQueue->size() > 0)
+                _audioQueue->pop();
+        }
+        inline bool isBuffersSafe(){return _videoQueue->size() > 0 && _audioQueue->size() > 0;};
         inline double getCurrentPTS(){return _currentPts;};
         inline int64_t getCurrentPTSTime(){return _currentPtsTime;};
         void refreshTimer(AVPacket);
@@ -64,6 +76,42 @@ class TSVideo
         inline void assignAudioCodec(AVCodecContext* audioCodec){_audioCodec = audioCodec;};
         inline void setVideoPts(double videoPts){_ioCtx->_videoPts = videoPts;};
         inline void setAudioPts(double audioPts){_ioCtx->_audioPts = audioPts;};
+        inline double getAudioPts(){return _ioCtx->_audioPts;};
+        inline int32_t getAudioQueueSize(){return _audioQueue->size();};
+        inline void enqueueVideo(AVPacket packet)
+        {
+            SDL_LockMutex(_videoQueueMutex);
+            _videoQueue->push(packet);
+            SDL_UnlockMutex(_videoQueueMutex);
+        };
+        inline AVPacket* dequeueVideo()
+        {
+            SDL_LockMutex(_videoQueueMutex);
+            if(_videoQueue->size() == 0)
+                return nullptr;
+            AVPacket* toRet = &_videoQueue->front();
+            _videoQueue->pop();
+            SDL_UnlockMutex(_videoQueueMutex);
+            return toRet;
+        }
+
+        inline void enqueueAudio(AVPacket packet)
+        {
+            SDL_LockMutex(_audioQueueMutex);
+            _audioQueue->push(packet);
+            SDL_UnlockMutex(_audioQueueMutex);
+        };
+        inline AVPacket* dequeueAudio()
+        {
+            SDL_LockMutex(_audioQueueMutex);
+            if(_audioQueue->size() == 0)
+                return nullptr;
+            AVPacket* toRet = &_audioQueue->front();
+            _audioQueue->pop();
+            SDL_UnlockMutex(_audioQueueMutex);
+            return toRet;
+        }
+
 };
 
 #endif

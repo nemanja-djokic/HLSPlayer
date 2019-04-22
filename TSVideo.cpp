@@ -17,12 +17,16 @@ TSVideo::TSVideo(std::string fname)
     this->_ioCtx = nullptr;
     this->_videoCodec = nullptr;
     this->_audioCodec = nullptr;
+    _videoQueue = new std::queue<AVPacket>();
+    _audioQueue = new std::queue<AVPacket>();
     _tsBlockBegin = new std::vector<int32_t>();
     _tsBlockBegin->push_back(0);
     _tsBlockDuration = new std::vector<double>();
     _tsBlockSize = new std::vector<int32_t>();
     _blockBufferSize = 0;
     _videoPlayerMutex = SDL_CreateMutex();
+    _videoQueueMutex = SDL_CreateMutex();
+    _audioQueueMutex = SDL_CreateMutex();
     _differenceCumulative = 0.0;
     _differenceCounter = 0;
 }
@@ -33,6 +37,8 @@ TSVideo::~TSVideo()
     delete _tsBlockBegin;
     delete _tsBlockDuration;
     delete _tsBlockSize;
+    delete _videoQueue;
+    delete _audioQueue;
 }
 
 void TSVideo::appendData(uint8_t* buffer, size_t len, bool isFirst, bool wholeBlock, double duration)
@@ -57,6 +63,16 @@ void TSVideo::appendData(uint8_t* buffer, size_t len, bool isFirst, bool wholeBl
         this->_tsBlockBegin->push_back(_ioCtx->_videoBufferSize);
         delete[] helpBuffer;
     }
+}
+
+void TSVideo::finalizeLoading()
+{
+    uint8_t* helpBuffer = new uint8_t[_videoPayload.size()];
+    std::copy(_videoPayload.begin(), _videoPayload.end(), helpBuffer);
+    this->_ioCtx->_videoBuffer = (uint8_t*)av_realloc(this->_ioCtx->_videoBuffer, _videoPayload.size());
+    memcpy(this->_ioCtx->_videoBuffer, helpBuffer, _videoPayload.size());
+    this->_ioCtx->_videoBufferSize = _videoPayload.size();
+    delete[] helpBuffer;
 }
 
 void TSVideo::appendAudio(uint8_t* buffer, size_t len)

@@ -15,8 +15,10 @@ static int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 	int32_t toRead = (buf_size < 16384)?buf_size:16384;
 	toRead = (toRead < (hctx->_videoBufferSize - hctx->_pos))?toRead:(hctx->_videoBufferSize - hctx->_pos);
 	if(toRead <= 0)
+	{
+		std::cout << "toRead <= 0" << std::endl;
 		return AVERROR_EOF;
-	
+	}
 	memcpy(buf, hctx->_videoBuffer + hctx->_pos, toRead);
 	hctx->_pos += toRead;
 	return toRead;
@@ -119,6 +121,8 @@ static int64_t IOSeekFunc(void *data, int64_t offset, int whence)
 	}
 	else if(whence == SEEK_SET)
 	{
+		hctx->_resetAudio = true;
+		avio_flush(hctx->_ioCtx);
 		if(offset < 0)
 		{
 			hctx->_pos = 0;
@@ -134,7 +138,6 @@ static int64_t IOSeekFunc(void *data, int64_t offset, int whence)
 			hctx->_pos = offset;
 			return offset;
 		}
-		
 	}
 	return -1;
 }
@@ -162,7 +165,6 @@ int AudioReadFunc(void *data, uint8_t *buf, int buf_size)
 
 	memset(buf, 0, buf_size);
 	SDL_MixAudio(buf, hctx->_audioBuffer + hctx->_audioPos, buf_size, SDL_MIX_MAXVOLUME);
-	//memcpy(buf, hctx->_audioBuffer + hctx->_audioPos, toRead);
 	hctx->_audioPos += toRead;
 	return toRead;
 }
@@ -170,7 +172,7 @@ int AudioReadFunc(void *data, uint8_t *buf, int buf_size)
 CustomIOContext::CustomIOContext() {
 	_videoBuffer = nullptr;
 	_audioBuffer = nullptr;
-	_resetAudio = true;
+	_resetAudio = false;
 	_videoBufferSize = 0;
 	_audioBufferSize = 0;
 	_bufferSize = 16384;
