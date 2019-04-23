@@ -34,3 +34,4 @@
 .vscode/*
 ipch/
 *.ipch
+.vscode/ipch/5dd97247fc43dbbb/ExtXStreamInf.ipch
