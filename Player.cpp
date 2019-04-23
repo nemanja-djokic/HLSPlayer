@@ -1,6 +1,13 @@
 #include "headers/Player.h"
 #include "headers/Constants.h"
 
+extern "C"
+{
+    #include "SDL2/SDL.h"
+    #include "SDL2/SDL_ttf.h"
+}
+
+#include <iomanip>
 #include <iostream>
 #include <fstream>
 #include <ios>
@@ -44,7 +51,7 @@ Player::Player(Playlist* playlist)
     _pFrameYUV = av_frame_alloc();
     
     std::thread(loadSegmentsThread, this).detach();
-    //av_log_set_level(AV_LOG_PANIC);
+    av_log_set_level(AV_LOG_PANIC);
 }
 
 Player::~Player()
@@ -64,7 +71,7 @@ void Player::loadSegments()
         for(size_t j = 0; j < payloadSize / TS_BLOCK_SIZE; j++)
         {
             toInsertVideo->appendData(segmentPayload + j * TS_BLOCK_SIZE, TS_BLOCK_SIZE, (i==0)?true:false, 
-                (j >= (payloadSize / TS_BLOCK_SIZE) - 1)?true:false, (*_playlist->getSegments())[i].getExtInf());
+                (j == 0)?true:false, (*_playlist->getSegments())[i].getExtInf());
         }
         toInsertVideo->sizeAccumulate();
         if(i == 0)
@@ -96,9 +103,11 @@ void  fill_audio(void* udata, uint8_t *stream, int len)
 	audio_len -= len; 
 }
 
+uint32_t lastPoll = 0;
+
 bool Player::pollEvent(SDL_Event event, TSVideo* actual)
 {
-    SDL_PollEvent(&event);  
+    SDL_PollEvent(&event);
     switch(event.type)
     {  
         case SDL_QUIT:  
@@ -106,6 +115,19 @@ bool Player::pollEvent(SDL_Event event, TSVideo* actual)
             return false;
         case SDL_KEYDOWN:
             {
+                if(lastPoll != 0)
+                {
+                    uint32_t currentPoll = SDL_GetTicks();
+                    if(currentPoll - lastPoll < 500)
+                    {
+                        return true;
+                    }
+                    else
+                    {
+                        lastPoll = currentPoll;
+                    }
+                    
+                }
                 if(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
                 {
                     SDL_Quit();
@@ -134,12 +156,13 @@ SDL_semaphore* audioSemaphore = SDL_CreateSemaphore(0);
 volatile bool audioThreadRunning = true;
 
 
-
+bool wasReset = false;
 
 void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSVideo* current, SwrContext* _swrCtx)
 {
     SDL_PauseAudio(0);
     AVFrame* _pFrame = av_frame_alloc();
+    int32_t framesToSkip = 0;
     while(audioThreadRunning)
     {
         SDL_SemWait(audioSemaphore);
@@ -154,7 +177,7 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
         int ret = avcodec_decode_audio4(audioCodecContext, _pFrame, gotPicture, packet);
         if(ret < 0)
         {
-            std::cerr << "Error decoding audio" << std::endl;
+            continue;
         }
         current->setAudioPts(packet->pts);
         int outBufferSize = av_samples_get_buffer_size(NULL, audioCodecContext->channels, audioCodecContext->frame_size, AV_SAMPLE_FMT_S16, 1);
@@ -167,7 +190,7 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
         if(current->isResetAudio())
         {
             audio_clear = true;
-            std::cout << "Resetting audio" << std::endl;
+            framesToSkip = current->getAudioQueueSize();
             uint8_t* tempBuffer = (uint8_t*)av_mallocz(outBufferSize);
             memcpy(tempBuffer, outBuffer, outBufferSize);
             av_free(audio_chunk);
@@ -178,46 +201,74 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
         }
         else
         {
-            uint32_t wantedSize = current->synchronizeAudio(outBufferSize ,packet->pts);
-            uint8_t* tempBuffer;
-            tempBuffer = (uint8_t*)av_mallocz(audio_len + outBufferSize);
-            memcpy(tempBuffer, audio_pos, audio_len);
-            memcpy(tempBuffer + audio_len, outBuffer, outBufferSize);
-            av_free(audio_chunk);
-            audio_chunk = (uint8_t*)tempBuffer;
-		    audio_len = audio_len + outBufferSize;
-            audio_pos = audio_chunk;
+            if(!(framesToSkip > 0))
+            {
+                uint32_t wantedSize = current->synchronizeAudio(outBufferSize ,packet->pts);
+                uint8_t* tempBuffer;
+                tempBuffer = (uint8_t*)av_mallocz(audio_len + outBufferSize);
+                memcpy(tempBuffer, audio_pos, audio_len);
+                memcpy(tempBuffer + audio_len, outBuffer, outBufferSize);
+                av_free(audio_chunk);
+                audio_chunk = (uint8_t*)tempBuffer;
+		        audio_len = audio_len + outBufferSize;
+                audio_pos = audio_chunk;
+            }
+            else
+            {
+                framesToSkip--;
+            }
         }
         av_free(outBuffer);
     }
 }
 
+bool waitingForKeyFrame = false;
+
 void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFrame* _pFrameYUV,
     SDL_Texture* _playerTexture, SDL_Rect* _sdlRect, SDL_Renderer* _playerRenderer, TSVideo* current)
 {
     AVFrame* _pFrame = av_frame_alloc();
-    if(current->isResetAudio())avcodec_flush_buffers(codecContext);
     AVPacket* packet = current->dequeueVideo();
     if(packet == nullptr)
         return;
     int frameFinished;
     int32_t startTicks = SDL_GetTicks();
-    avcodec_decode_video2(codecContext, _pFrame, &frameFinished, packet);
+    int decodeStatus = avcodec_decode_video2(codecContext, _pFrame, &frameFinished, packet);
+    if(decodeStatus < 0)return;
     if(frameFinished)
     {
-        sws_scale(  
-        _swsCtx,  
-        (uint8_t const * const *)_pFrame->data,  
-        _pFrame->linesize,  
-        0,  
-        codecContext->height,
-        _pFrameYUV->data,
-        _pFrameYUV->linesize
-        );
-        SDL_UpdateTexture(_playerTexture, _sdlRect, _pFrameYUV->data[0], _pFrameYUV->linesize[0]);  
-        SDL_RenderClear(_playerRenderer);  
-        SDL_RenderCopy(_playerRenderer, _playerTexture, _sdlRect, _sdlRect);  
-        SDL_RenderPresent(_playerRenderer);
+        if(!waitingForKeyFrame || _pFrame->key_frame == 1)
+        {
+            if(waitingForKeyFrame && _pFrame->key_frame == 1)
+            {
+                waitingForKeyFrame = false;
+            }
+            uint32_t seconds = _pFrame->pts / 100000;
+            if(seconds != current->getLastTimestamp())
+            {
+                std::cout << '\r' << '\r' << std::flush << std::setfill('0') << std::setw(2) << seconds / 60 << ":" << std::setfill('0') << std::setw(2)  << seconds % 60;
+                current->setLastTimestamp(seconds);
+            }
+            sws_scale(  
+            _swsCtx,  
+            (uint8_t const * const *)_pFrame->data,  
+            _pFrame->linesize,  
+            0,  
+            codecContext->height,
+            _pFrameYUV->data,
+            _pFrameYUV->linesize
+            );
+            SDL_UpdateTexture(_playerTexture, _sdlRect, _pFrameYUV->data[0], _pFrameYUV->linesize[0]);
+            SDL_RenderClear(_playerRenderer);
+            SDL_RenderCopy(_playerRenderer, _playerTexture, _sdlRect, _sdlRect);
+            SDL_RenderPresent(_playerRenderer);
+        }
+        else
+        {
+            //TODO: Figure out how to write text on screen
+
+        }
+        
         current->refreshTimer(*packet);
         int32_t endTicks = SDL_GetTicks();
         int32_t delay = (1000.0 / av_q2d(codecContext->framerate)) - (endTicks - startTicks);
@@ -271,10 +322,10 @@ bool Player::playNext()
     }
     SDL_AudioSpec wantedSpec;
     SDL_AudioSpec audioSpec;
-    if(!SDL_WasInit(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER))
+    if(!SDL_WasInit(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_RENDERER_ACCELERATED))
     {
         std::cout << "called init sdl" << std::endl;
-        if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER))
+        if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_RENDERER_ACCELERATED))
         {
             std::cerr << "Could not initialize SDL - " << SDL_GetError() << std::endl;
             return false;
@@ -383,6 +434,7 @@ bool Player::playNext()
     std::thread audioThread = std::thread(audioThreadFunction, audioCodecContext, &gotPicture, &current, _swrCtx);
     audioThread.detach();
     bool enqueuedFirstAudio = false;
+    uint32_t lastPoll = 0;
     while(av_read_frame(_formatContext, &packet) >= 0)
     {
         while(_paused)
@@ -390,7 +442,7 @@ bool Player::playNext()
             if(!pollEvent(event, &current))
                 return false;
         }
-        if(current.isResetAudio())enqueuedFirstAudio = false;
+        if(current.isResetAudio())waitingForKeyFrame = true;
         SDL_LockMutex(current.getVideoPlayerMutex());
         if(packet.stream_index == _videoStream)
         {

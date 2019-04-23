@@ -35,6 +35,7 @@ class TSVideo
         int32_t _differenceCounter;
         std::queue<AVPacket>* _videoQueue;
         std::queue<AVPacket>* _audioQueue;
+        uint32_t _lastTimestamp;
         AVCodecContext* _videoCodec;
         AVCodecContext* _audioCodec;
         AVFormatContext* _formatContext;
@@ -42,6 +43,8 @@ class TSVideo
     public:
         TSVideo(std::string);
         ~TSVideo();
+        inline uint32_t getLastTimestamp(){return _lastTimestamp;};
+        inline void setLastTimestamp(uint32_t timestamp){_lastTimestamp = timestamp;};
         inline bool isSaved(){return _isSaved;};
         void appendData(uint8_t*, size_t, bool, bool, double);
         void appendAudio(uint8_t*, size_t);
@@ -78,6 +81,7 @@ class TSVideo
         inline void setAudioPts(double audioPts){_ioCtx->_audioPts = audioPts;};
         inline double getAudioPts(){return _ioCtx->_audioPts;};
         inline int32_t getAudioQueueSize(){return _audioQueue->size();};
+        inline int32_t getVideoQueueSize(){return _videoQueue->size();};
         inline void enqueueVideo(AVPacket packet)
         {
             SDL_LockMutex(_videoQueueMutex);

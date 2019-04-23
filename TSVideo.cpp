@@ -17,6 +17,7 @@ TSVideo::TSVideo(std::string fname)
     this->_ioCtx = nullptr;
     this->_videoCodec = nullptr;
     this->_audioCodec = nullptr;
+    _lastTimestamp = -1;
     _videoQueue = new std::queue<AVPacket>();
     _audioQueue = new std::queue<AVPacket>();
     _tsBlockBegin = new std::vector<int32_t>();
@@ -142,13 +143,65 @@ void TSVideo::seek(int64_t offset, int64_t whence)
             int pos = -1;
             while(pos < (int64_t)this->_tsBlockBegin->size() && this->_tsBlockBegin->at(++pos) < this->_ioCtx->_pos);
             pos--;
+            if(pos < 0)
+            {
+                this->_ioCtx->_ioCtx->seek(this->_ioCtx, 0, SEEK_SET);
+                return;
+            }
             double currentBlockDuration = this->_tsBlockDuration->at(pos);
             double currentBlockElapsed = ((double)(this->_ioCtx->_pos - this->_tsBlockBegin->at(pos)) / (double)this->_tsBlockSize->at(pos))
-            * this->_tsBlockDuration->at(pos);
-            if(offset < 0)
+            *this->_tsBlockDuration->at(pos);
+            if(offset > 0)
             {
                 double toSeek = (double)offset;
-                toSeek += currentBlockElapsed;
+                if(toSeek < (currentBlockDuration - currentBlockElapsed))
+                {
+                    int64_t offsetBytes = (int64_t)((double)this->_tsBlockSize->at(pos) * (toSeek / currentBlockDuration));
+                    this->_ioCtx->_ioCtx->seek(this->_ioCtx, this->_tsBlockBegin->at(pos) + offsetBytes, SEEK_SET);
+                }
+                else
+                {
+                    toSeek -= (currentBlockDuration - currentBlockElapsed);
+                    pos++;
+                    while(toSeek > this->_tsBlockDuration->at(pos))
+                    {
+                        toSeek -= this->_tsBlockDuration->at(pos);
+                        pos++;
+                    }
+                    int64_t offsetBytes = (int64_t)((double)this->_tsBlockSize->at(pos) * (toSeek / currentBlockDuration));
+                    this->_ioCtx->_ioCtx->seek(this->_ioCtx, this->_tsBlockBegin->at(pos) + offsetBytes, SEEK_SET);
+                }
+            }
+            else if(offset < 0)
+            {
+                double toSeek = (double)offset - 1;
+                if(fabs(toSeek) < currentBlockElapsed)
+                {
+                    int64_t offsetBytes = (int64_t)((double)this->_tsBlockSize->at(pos) * (fabs(toSeek) / currentBlockDuration));
+                    this->_ioCtx->_ioCtx->seek(this->_ioCtx, this->_tsBlockBegin->at(pos) - offsetBytes, SEEK_SET);
+                }
+                else
+                {
+                    toSeek += currentBlockElapsed;
+                    pos--;
+                    while(pos > -1 && fabs(toSeek) > this->_tsBlockDuration->at(pos))
+                    {
+                        toSeek += this->_tsBlockDuration->at(pos);
+                        pos--;
+                    }
+                    if(pos < 0)
+                    {
+                        this->_ioCtx->_ioCtx->seek(this->_ioCtx, 0, SEEK_SET);
+                        return;
+                    }
+                    int64_t offsetBytes = (int64_t)((double)this->_tsBlockSize->at(pos) * (fabs(toSeek) / currentBlockDuration)); 
+                    this->_ioCtx->_ioCtx->seek(this->_ioCtx, this->_tsBlockBegin->at(pos + 1) - offsetBytes, SEEK_SET);
+                }
+            }
+            /*if(offset < 0)
+            {
+                double toSeek = (double)offset;
+                toSeek -= currentBlockElapsed;
                 int posOfEndBlock = pos;
                 while(posOfEndBlock > 0 && toSeek < 0)
                 {
@@ -189,11 +242,11 @@ void TSVideo::seek(int64_t offset, int64_t whence)
                 }
                 this->_ioCtx->_resetAudio = true;
                 this->_ioCtx->_ioCtx->seek(this->_ioCtx, this->_tsBlockBegin->at(posOfEndBlock), SEEK_SET);
-            }
+            }*/
             avio_flush(this->_ioCtx->_ioCtx);
             if(_videoCodec != nullptr)
             {
-                avcodec_flush_buffers(_videoCodec);
+                //avcodec_flush_buffers(_videoCodec);
             }
             else
             {

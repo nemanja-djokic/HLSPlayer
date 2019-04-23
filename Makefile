@@ -3,7 +3,7 @@ CC = g++
 CFLAGS = -g3 -Wall -Werror -Wno-deprecated-declarations -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-variable
 
 INCLUDE = 
-LIBS = -lSDL2main -lSDL2 -lcurl -lavdevice -lavformat -lavfilter -lavcodec -lswscale -lavutil -lpthread -lz -lswresample
+LIBS = -lSDL2main -lSDL2 -lcurl -lavdevice -lavformat -lavfilter -lavcodec -lswscale -lavutil -lpthread -lz -lswresample -lSDL2_ttf
 LIBDIR = 
 
 SRC = $(wildcard *.cpp)
