@@ -30,6 +30,14 @@ TSVideo::TSVideo(std::string fname)
     _audioQueueMutex = SDL_CreateMutex();
     _differenceCumulative = 0.0;
     _differenceCounter = 0;
+    font = TTF_OpenFont("/usr/share/fonts/truetype/Sarai/Sarai.ttf", 72);
+    if (font == nullptr)
+    {
+        std::cerr << "TTF_OpenFont() Failed: " << TTF_GetError() << std::endl;
+        TTF_Quit();
+        SDL_Quit();
+        exit(1);
+    }
 }
 
 TSVideo::~TSVideo()
@@ -99,6 +107,16 @@ uint8_t* TSVideo::getPayload()
     return out;
 }
 
+uint32_t TSVideo::getFullDuration()
+{
+    double total = 0.0;
+    for(size_t i = 0; i < _tsBlockDuration->size(); i++)
+    {
+        total += _tsBlockDuration->at(i);
+    }
+    return (uint32_t)total;
+}
+
 void TSVideo::prepareFile()
 {
     size_t size = this->_videoPayload.size();
@@ -141,12 +159,24 @@ void TSVideo::seek(int64_t offset, int64_t whence)
         {
             SDL_LockMutex(_videoPlayerMutex);
             int pos = -1;
-            while(pos < (int64_t)this->_tsBlockBegin->size() && this->_tsBlockBegin->at(++pos) < this->_ioCtx->_pos);
+            while(pos < (int64_t)this->_tsBlockBegin->size() - 1 && this->_tsBlockBegin->at(++pos) < this->_ioCtx->_pos);
             pos--;
             if(pos < 0)
             {
                 this->_ioCtx->_ioCtx->seek(this->_ioCtx, 0, SEEK_SET);
                 return;
+            }
+            else if(pos > (int64_t)_tsBlockBegin->size() - 2)
+            {
+                if(offset < 0)
+                {
+                    this->_ioCtx->_ioCtx->seek(this->_ioCtx, this->_tsBlockBegin->at(this->_tsBlockBegin->size() - 1), SEEK_SET);
+                    return;
+                }
+                else if(offset > 0)
+                {
+                    return;
+                }
             }
             double currentBlockDuration = this->_tsBlockDuration->at(pos);
             double currentBlockElapsed = ((double)(this->_ioCtx->_pos - this->_tsBlockBegin->at(pos)) / (double)this->_tsBlockSize->at(pos))
@@ -182,76 +212,45 @@ void TSVideo::seek(int64_t offset, int64_t whence)
                 }
                 else
                 {
+                    std::cout << "here" << std::endl;
                     toSeek += currentBlockElapsed;
                     pos--;
-                    while(pos > -1 && fabs(toSeek) > this->_tsBlockDuration->at(pos))
+                    while(pos > -1 && pos < (int64_t)this->_tsBlockDuration->size() && fabs(toSeek) > this->_tsBlockDuration->at(pos))
                     {
+                        std::cout << "looping" << std::endl;
                         toSeek += this->_tsBlockDuration->at(pos);
                         pos--;
                     }
+                    std::cout << "ended loop" << std::endl;
                     if(pos < 0)
                     {
                         this->_ioCtx->_ioCtx->seek(this->_ioCtx, 0, SEEK_SET);
                         return;
                     }
+                    if(pos >= (int64_t)_tsBlockDuration->size())pos--;
                     int64_t offsetBytes = (int64_t)((double)this->_tsBlockSize->at(pos) * (fabs(toSeek) / currentBlockDuration)); 
-                    this->_ioCtx->_ioCtx->seek(this->_ioCtx, this->_tsBlockBegin->at(pos + 1) - offsetBytes, SEEK_SET);
+                    if(pos < (int64_t)_tsBlockSize->size() - 1)this->_ioCtx->_ioCtx->seek(this->_ioCtx, this->_tsBlockBegin->at(pos + 1) - offsetBytes, SEEK_SET);
+                    else this->_ioCtx->_ioCtx->seek(this->_ioCtx, this->_tsBlockBegin->at(pos), SEEK_SET);
                 }
             }
-            /*if(offset < 0)
-            {
-                double toSeek = (double)offset;
-                toSeek -= currentBlockElapsed;
-                int posOfEndBlock = pos;
-                while(posOfEndBlock > 0 && toSeek < 0)
-                {
-                    toSeek += this->_tsBlockDuration->at(posOfEndBlock);
-                    posOfEndBlock--;
-                }
-                if(posOfEndBlock < 0)
-                {
-                    posOfEndBlock = 0;
-                }
-                else if(toSeek > 0 && fabs(toSeek) < (this->_tsBlockDuration->at(posOfEndBlock)) 
-                && fabs(toSeek) > (this->_tsBlockDuration->at(posOfEndBlock)/2))
-                {
-                    posOfEndBlock+=1;
-                }
-                this->_ioCtx->_ioCtx->seek(this->_ioCtx, this->_tsBlockBegin->at(posOfEndBlock), SEEK_SET);
-                this->_ioCtx->_resetAudio = true;
-            }
-            else if(offset > 0)
-            {
-                double toSeek = (double)offset;
-                toSeek += currentBlockElapsed;
-                int posOfEndBlock = pos;
-                while((uint32_t)posOfEndBlock < this->_tsBlockBegin->size() && toSeek > 0)
-                {
-                    toSeek -= this->_tsBlockDuration->at(posOfEndBlock);
-                    posOfEndBlock++;
-                }
-                posOfEndBlock--;
-                if((uint32_t)posOfEndBlock > this->_tsBlockBegin->size() - 1)
-                {
-                    posOfEndBlock = this->_tsBlockBegin->size() - 1;
-                }
-                else if(toSeek > 0 && fabs(toSeek) < (this->_tsBlockDuration->at(posOfEndBlock)) 
-                && fabs(toSeek) > (this->_tsBlockDuration->at(posOfEndBlock)/2))
-                {
-                    posOfEndBlock+=1;
-                }
-                this->_ioCtx->_resetAudio = true;
-                this->_ioCtx->_ioCtx->seek(this->_ioCtx, this->_tsBlockBegin->at(posOfEndBlock), SEEK_SET);
-            }*/
             avio_flush(this->_ioCtx->_ioCtx);
-            if(_videoCodec != nullptr)
+            if(_audioCodec != nullptr)
             {
-                //avcodec_flush_buffers(_videoCodec);
+                avcodec_flush_buffers(_audioCodec);
             }
             else
             {
-                std::cerr << "(TSVideo) Video codec unassigned" << std::endl;
+                std::cerr << "(TSVideo) Audio codec unassigned" << std::endl;
             }
+            SDL_UnlockMutex(_videoPlayerMutex);
+        }
+        else if(whence == SEEK_SET)
+        {
+            int32_t totalSize = 0;
+            for(size_t i = 0; i < this->_tsBlockSize->size(); i++)
+                totalSize += this->_tsBlockSize->at(i);
+            int32_t newPos = (offset * totalSize) / 10;
+            this->_ioCtx->_ioCtx->seek(this->_ioCtx, newPos, SEEK_SET);avio_flush(this->_ioCtx->_ioCtx);
             if(_audioCodec != nullptr)
             {
                 avcodec_flush_buffers(_audioCodec);

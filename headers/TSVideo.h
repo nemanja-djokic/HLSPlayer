@@ -5,6 +5,7 @@ extern "C"
 {
     #include "libavformat/avformat.h"
     #include "SDL2/SDL_mutex.h"
+    #include "SDL2/SDL_ttf.h"
 }
 
 #include "CustomIOContext.h"
@@ -33,6 +34,7 @@ class TSVideo
         SDL_mutex* _audioQueueMutex;
         double _differenceCumulative;
         int32_t _differenceCounter;
+        TTF_Font* font;
         std::queue<AVPacket>* _videoQueue;
         std::queue<AVPacket>* _audioQueue;
         uint32_t _lastTimestamp;
@@ -43,9 +45,11 @@ class TSVideo
     public:
         TSVideo(std::string);
         ~TSVideo();
+        uint32_t getFullDuration();
         inline uint32_t getLastTimestamp(){return _lastTimestamp;};
         inline void setLastTimestamp(uint32_t timestamp){_lastTimestamp = timestamp;};
         inline bool isSaved(){return _isSaved;};
+        inline TTF_Font* getFont(){return font;};
         void appendData(uint8_t*, size_t, bool, bool, double);
         void appendAudio(uint8_t*, size_t);
         inline bool getHasData(){return _hasData;};

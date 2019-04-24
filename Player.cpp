@@ -49,7 +49,7 @@ Player::Player(Playlist* playlist)
     _videoStream = -1;
     _audioStream = -1;
     _pFrameYUV = av_frame_alloc();
-    
+    TTF_Init();
     std::thread(loadSegmentsThread, this).detach();
     av_log_set_level(AV_LOG_PANIC);
 }
@@ -81,7 +81,7 @@ void Player::loadSegments()
             this->_tsVideo.push_back(toInsertVideo);
         }
     }
-    //toInsertVideo->finalizeLoading();
+    toInsertVideo->finalizeLoading();
 }
 
 static uint8_t *audio_chunk; 
@@ -145,6 +145,26 @@ bool Player::pollEvent(SDL_Event event, TSVideo* actual)
                 {
                     actual->seek(15, SEEK_CUR);
                 }
+                else if(event.key.keysym.scancode == SDL_SCANCODE_0 || event.key.keysym.scancode == SDL_SCANCODE_KP_0)
+                    actual->seek(0, SEEK_SET);
+                else if(event.key.keysym.scancode == SDL_SCANCODE_1 || event.key.keysym.scancode == SDL_SCANCODE_KP_1)
+                    actual->seek(1, SEEK_SET);
+                else if(event.key.keysym.scancode == SDL_SCANCODE_2 || event.key.keysym.scancode == SDL_SCANCODE_KP_2)
+                    actual->seek(2, SEEK_SET);
+                else if(event.key.keysym.scancode == SDL_SCANCODE_3 || event.key.keysym.scancode == SDL_SCANCODE_KP_3)
+                    actual->seek(3, SEEK_SET);
+                else if(event.key.keysym.scancode == SDL_SCANCODE_4 || event.key.keysym.scancode == SDL_SCANCODE_KP_4)
+                    actual->seek(4, SEEK_SET);
+                else if(event.key.keysym.scancode == SDL_SCANCODE_5 || event.key.keysym.scancode == SDL_SCANCODE_KP_5)
+                    actual->seek(5, SEEK_SET);
+                else if(event.key.keysym.scancode == SDL_SCANCODE_6 || event.key.keysym.scancode == SDL_SCANCODE_KP_6)
+                    actual->seek(6, SEEK_SET);
+                else if(event.key.keysym.scancode == SDL_SCANCODE_7 || event.key.keysym.scancode == SDL_SCANCODE_KP_7)
+                    actual->seek(7, SEEK_SET);
+                else if(event.key.keysym.scancode == SDL_SCANCODE_8 || event.key.keysym.scancode == SDL_SCANCODE_KP_8)
+                    actual->seek(8, SEEK_SET);
+                else if(event.key.keysym.scancode == SDL_SCANCODE_9 || event.key.keysym.scancode == SDL_SCANCODE_KP_9)
+                    actual->seek(9, SEEK_SET);
             }
         default:  
             break;  
@@ -223,9 +243,11 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
 }
 
 bool waitingForKeyFrame = false;
+AVFrame* lastValidFrame = nullptr;
 
 void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFrame* _pFrameYUV,
-    SDL_Texture* _playerTexture, SDL_Rect* _sdlRect, SDL_Renderer* _playerRenderer, TSVideo* current)
+    SDL_Texture* _playerTexture, SDL_Rect* _sdlRect, SDL_Renderer* _playerRenderer, TSVideo* current,
+    int32_t windowWidth, int32_t windowHeight, int32_t textWidth, int32_t textHeight)
 {
     AVFrame* _pFrame = av_frame_alloc();
     AVPacket* packet = current->dequeueVideo();
@@ -244,11 +266,34 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
                 waitingForKeyFrame = false;
             }
             uint32_t seconds = _pFrame->pts / 100000;
-            if(seconds != current->getLastTimestamp())
+            std::stringstream timestampString;
+            timestampString << std::setfill('0') << std::setw(2) << seconds / 60 << ":" << std::setfill('0') << std::setw(2)  << seconds % 60
+            << " / " << std::setfill('0') << std::setw(2) << current->getFullDuration() / 60 << ":" << std::setfill('0') << std::setw(2)
+            << current->getFullDuration() % 60;
+
+            current->setLastTimestamp(seconds);
+            SDL_Surface *text;
+            SDL_Color text_color = {255, 255, 255};
+            text = TTF_RenderText_Solid(current->getFont(),
+            timestampString.str().c_str(),
+            text_color);
+
+            if (text == NULL)
             {
-                std::cout << '\r' << '\r' << std::flush << std::setfill('0') << std::setw(2) << seconds / 60 << ":" << std::setfill('0') << std::setw(2)  << seconds % 60;
-                current->setLastTimestamp(seconds);
+                std::cerr << "TTF_RenderText_Solid() Failed: " << TTF_GetError() << std::endl;
+                TTF_Quit();
+                SDL_Quit();
+                exit(1);
             }
+
+            SDL_Texture* screenPrint = SDL_CreateTextureFromSurface(_playerRenderer, text);
+            SDL_Rect messageRect;
+            messageRect.x = windowWidth / 2 - textWidth / 2;
+            messageRect.y = windowHeight - textHeight;
+            messageRect.w = textWidth;
+            messageRect.h = textHeight;
+
+
             sws_scale(  
             _swsCtx,  
             (uint8_t const * const *)_pFrame->data,  
@@ -258,14 +303,49 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
             _pFrameYUV->data,
             _pFrameYUV->linesize
             );
+            if(_pFrame->key_frame == 1)lastValidFrame = _pFrameYUV;
             SDL_UpdateTexture(_playerTexture, _sdlRect, _pFrameYUV->data[0], _pFrameYUV->linesize[0]);
             SDL_RenderClear(_playerRenderer);
             SDL_RenderCopy(_playerRenderer, _playerTexture, _sdlRect, _sdlRect);
+            
+            SDL_RenderCopy(_playerRenderer, screenPrint, nullptr, &messageRect);
             SDL_RenderPresent(_playerRenderer);
         }
         else
         {
-            //TODO: Figure out how to write text on screen
+            SDL_Surface *text;
+            SDL_Color text_color = {255, 255, 255};
+            text = TTF_RenderText_Solid(current->getFont(),
+            "Seeking...",
+            text_color);
+
+            if (text == NULL)
+            {
+                std::cerr << "TTF_RenderText_Solid() Failed: " << TTF_GetError() << std::endl;
+                TTF_Quit();
+                SDL_Quit();
+                exit(1);
+            }
+
+            SDL_Texture* screenPrint = SDL_CreateTextureFromSurface(_playerRenderer, text);
+            SDL_Rect messageRect;
+            messageRect.x = 0;
+            messageRect.y = 0;
+            messageRect.w = textWidth;
+            messageRect.h = textHeight;
+
+
+            sws_scale(  
+            _swsCtx,  
+            (uint8_t const * const *)_pFrame->data,  
+            _pFrame->linesize,  
+            0,  
+            codecContext->height,
+            _pFrameYUV->data,
+            _pFrameYUV->linesize
+            );
+            SDL_RenderCopy(_playerRenderer, screenPrint, nullptr, &messageRect);
+            SDL_RenderPresent(_playerRenderer);
 
         }
         
@@ -415,7 +495,7 @@ bool Player::playNext()
             std::cerr << "SDL: could not set video mode" << std::endl;
             return false;
         }
-        //SDL_SetWindowFullscreen(_playerWindow, SDL_WINDOW_FULLSCREEN_DESKTOP);
+        SDL_SetWindowFullscreen(_playerWindow, SDL_WINDOW_FULLSCREEN_DESKTOP);
         _playerRenderer = SDL_CreateRenderer(_playerWindow, -1, SDL_RENDERER_TARGETTEXTURE);
 
         _playerTexture = SDL_CreateTexture(  
@@ -447,7 +527,8 @@ bool Player::playNext()
         if(packet.stream_index == _videoStream)
         {
             current.enqueueVideo(packet);
-            if(enqueuedFirstAudio)videoThreadFunction(codecContext, _swsCtx, _pFrameYUV, _playerTexture, &_sdlRect, _playerRenderer, &current);
+            if(enqueuedFirstAudio)videoThreadFunction(codecContext, _swsCtx, _pFrameYUV, _playerTexture, &_sdlRect, _playerRenderer, &current,
+                displayMode.w, displayMode.h, displayMode.w / 10, displayMode.h / 10);
         }
         else if(packet.stream_index == _audioStream)
         {
