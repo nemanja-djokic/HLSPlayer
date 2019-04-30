@@ -254,75 +254,6 @@ void TSVideo::seek(int64_t offset, int64_t whence)
     }
 }
 
-void TSVideo::refreshTimer(AVPacket packet)
-{
-    this->_currentPts = packet.pts;
-    this->_currentPtsTime = (int64_t)(av_q2d(av_get_time_base_q()));
-}
-
-double TSVideo::getVideoClock()
-{
-    double delta;
-    delta = ( (int64_t)(av_q2d(av_get_time_base_q())) - this->_currentPtsTime ) / 1000000.0;
-    return this->_currentPtsTime + delta;
-}
-
-double TSVideo::getExternalClock()
-{
-    return av_gettime() / 1000000.0;
-}
-
-double TSVideo::synchronizeVideo(AVFrame* sourceFrame, double pts)
-{
-    double frameDelay;
-    if(pts != 0)
-    {
-        this->_currentPts = pts;
-    }
-    else
-    {
-        pts = this->_currentPts;
-    }
-    frameDelay = av_q2d(this->_videoCodec->time_base);
-    frameDelay += sourceFrame->repeat_pict * (frameDelay * 0.5);
-    this->_currentPts += frameDelay;
-    return pts;
-}
-
-int32_t TSVideo::synchronizeAudio(uint32_t samplesSize, double pts)
-{
-    int n;
-    double refClock;
-    n = 2 * this->_audioCodec->channels;
-
-    double diff, avgDiff;
-    int wantedSize, minSize, maxSize, nbSamples;
-
-    minSize = samplesSize / 2;
-    maxSize = samplesSize * 1.5;
-
-    refClock = getExternalClock();
-    diff = (this->_currentPts - pts) / 10000;
-
-    _differenceCumulative += diff;
-    _differenceCounter++;
-
-    if(fabs(_differenceCumulative) < 150)
-    {
-        wantedSize = samplesSize;
-    }
-    else
-    {
-        int32_t samplesDifference = (_differenceCumulative * this->_audioCodec->sample_rate) / 1000;
-        wantedSize = samplesSize - samplesDifference;
-        wantedSize = (wantedSize > maxSize)?maxSize : wantedSize;
-        wantedSize = (wantedSize < minSize)?minSize : wantedSize;
-        _differenceCumulative = 0;
-        _differenceCounter = 0;
-    }
-    return wantedSize;
-}
-
 uint32_t TSVideo::getSeconds()
 {
     int pos = -1;
@@ -338,7 +269,6 @@ uint32_t TSVideo::getSeconds()
     {
        return 0;
     }
-    double currentBlockDuration = this->_tsBlockDuration->at(pos);
     double currentBlockElapsed = ((double)(this->_ioCtx->_pos - this->_tsBlockBegin->at(pos)) / (double)this->_tsBlockSize->at(pos))
     *this->_tsBlockDuration->at(pos);
     return (uint32_t)(cumulative + currentBlockElapsed);

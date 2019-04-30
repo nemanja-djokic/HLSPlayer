@@ -8,6 +8,7 @@ extern "C"
     #include "SDL2/SDL_ttf.h"
 }
 
+#include "PlaylistSegment.h"
 #include "CustomIOContext.h"
 
 #include <vector>
@@ -51,7 +52,6 @@ class TSVideo
         inline bool isSaved(){return _isSaved;};
         inline TTF_Font* getFont(){return font;};
         void appendData(uint8_t*, size_t, bool, bool, double);
-        void appendAudio(uint8_t*, size_t);
         inline bool getHasData(){return _hasData;};
         inline size_t getSize(){return _videoPayload.size();};
         uint8_t* getPayload();
@@ -61,29 +61,19 @@ class TSVideo
         inline AVFormatContext* getFormatContext(){return _formatContext;};
         void seek(int64_t, int64_t);
         void finalizeLoading();
-        inline bool isResetAudio(){return _ioCtx->_resetAudio;};
-        inline void clearResetAudio(){_ioCtx->_resetAudio = false;};
+        inline bool isResetAudio(){return _ioCtx->isResetAudio();};
+        inline void clearResetAudio(){_ioCtx->clearResetAudio();};
         inline void clearAudioPackets()
         {
             while(_audioQueue->size() > 0)
                 _audioQueue->pop();
         }
         inline bool isBuffersSafe(){return _videoQueue->size() > 0 && _audioQueue->size() > 0;};
-        inline double getCurrentPTS(){return _currentPts;};
-        inline int64_t getCurrentPTSTime(){return _currentPtsTime;};
-        void refreshTimer(AVPacket);
-        double getVideoClock();
-        double getExternalClock();
-        double synchronizeVideo(AVFrame*, double);
-        int32_t synchronizeAudio(uint32_t, double);
         void sizeAccumulate();
         inline SDL_mutex* getVideoPlayerMutex(){return _videoPlayerMutex;};
         inline CustomIOContext* getCustomIOContext(){return _ioCtx;};
         inline void assignVideoCodec(AVCodecContext* videoCodec){_videoCodec = videoCodec;};
         inline void assignAudioCodec(AVCodecContext* audioCodec){_audioCodec = audioCodec;};
-        inline void setVideoPts(double videoPts){_ioCtx->_videoPts = videoPts;};
-        inline void setAudioPts(double audioPts){_ioCtx->_audioPts = audioPts;};
-        inline double getAudioPts(){return _ioCtx->_audioPts;};
         inline int32_t getAudioQueueSize(){return _audioQueue->size();};
         inline int32_t getVideoQueueSize(){return _videoQueue->size();};
         uint32_t getSeconds();

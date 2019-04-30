@@ -19,7 +19,7 @@ extern "C"
 #define _CUSTOM_IO_CONTEXT_H_
 
 class CustomIOContext {
-public:
+private:
     SDL_mutex* _bufferMutex;
 
     bool _resetAudio;
@@ -29,11 +29,14 @@ public:
     uint8_t* _videoBuffer;
     int _videoBufferSize;
     int32_t _pos;
+public:
+    inline bool isResetAudio(){return _resetAudio;};
+    inline void setResetAudio(){_resetAudio = true;};
+    inline void clearResetAudio(){_resetAudio = false;};
 
-    double _videoPts;
-    double _audioPts;
-    int32_t _syncOffset;
-
+    friend int IOReadFunc(void *data, uint8_t *buf, int buf_size);
+    friend int64_t IOSeekFunc(void *data, int64_t offset, int whence);
+    friend class TSVideo;
 	CustomIOContext();
 	~CustomIOContext();
 	void initAVFormatContext(AVFormatContext *);

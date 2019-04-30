@@ -65,11 +65,9 @@ void Player::loadSegments()
     TSVideo* toInsertVideo = new TSVideo((*_playlist->getSegments())[_playlist->getSegments()->size() - 1].getEndpoint());
     for(unsigned int i = 0; i < (*_playlist->getSegments()).size(); i++)
     {
-        std::cout << "Loading segment: " << i << std::endl;
         (*_playlist->getSegments())[i].loadSegment();
         uint8_t* segmentPayload = (*_playlist->getSegments())[i].getTsData();
         size_t payloadSize = (*_playlist->getSegments())[i].loadedSize();
-        std::cout << "payloadSize:" << payloadSize << std::endl;
         for(size_t j = 0; j < payloadSize / TS_BLOCK_SIZE; j++)
         {
             toInsertVideo->appendData(segmentPayload + j * TS_BLOCK_SIZE, TS_BLOCK_SIZE, (i==0)?true:false, 
@@ -201,7 +199,6 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
         {
             continue;
         }
-        current->setAudioPts(packet->pts);
         int outBufferSize = av_samples_get_buffer_size(NULL, audioCodecContext->channels, audioCodecContext->frame_size, AV_SAMPLE_FMT_S16, 1);
         uint8_t* outBuffer = (uint8_t *)av_mallocz(outBufferSize * audioCodecContext->channels);
         if(gotPicture > 0)
@@ -225,7 +222,6 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
         {
             if(!(framesToSkip > 0))
             {
-                uint32_t wantedSize = current->synchronizeAudio(outBufferSize ,packet->pts);
                 uint8_t* tempBuffer;
                 tempBuffer = (uint8_t*)av_mallocz(audio_len + outBufferSize);
                 memcpy(tempBuffer, audio_pos, audio_len);
@@ -355,8 +351,6 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
             SDL_FreeSurface(text);
 
         }
-        
-        current->refreshTimer(*packet);
         int32_t endTicks = SDL_GetTicks();
         int32_t delay = (1000.0 / av_q2d(codecContext->framerate)) - (endTicks - startTicks);
         delay = (delay < 0)?0:delay;
@@ -525,7 +519,6 @@ bool Player::playNext()
     std::thread audioThread = std::thread(audioThreadFunction, audioCodecContext, &gotPicture, &current, _swrCtx);
     audioThread.detach();
     bool enqueuedFirstAudio = false;
-    uint32_t lastPoll = 0;
     while(av_read_frame(_formatContext, &packet) >= 0)
     {
         while(_paused)

@@ -5,7 +5,7 @@ extern "C"
 }
 #include <iostream>
 
-static int IOReadFunc(void *data, uint8_t *buf, int buf_size)
+int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 {
 	CustomIOContext *hctx = (CustomIOContext*)data;
 	if (hctx->_pos >= hctx->_videoBufferSize)
@@ -27,21 +27,7 @@ static int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 	return toRead;
 }
 
-static bool isH264iFrame(uint8_t* paket)
-{
-	int RTPHeaderBytes = 0;
-	int fragment_type = paket[RTPHeaderBytes + 0] & 0x1F;
-	int nal_type = paket[RTPHeaderBytes + 1] & 0x1F;
-	int start_bit = paket[RTPHeaderBytes + 1] & 0x80;
-	if (((fragment_type == 28 || fragment_type == 29) && nal_type == 5 && start_bit == 128) || fragment_type == 5)
-    {
-        return true;
-    }
-
-    return false;
-}
-
-static int64_t IOSeekFunc(void *data, int64_t offset, int whence)
+int64_t IOSeekFunc(void *data, int64_t offset, int whence)
 {
 	CustomIOContext* hctx = (CustomIOContext*)data;
 	if(hctx->_ioCtx == nullptr)
@@ -77,7 +63,7 @@ static int64_t IOSeekFunc(void *data, int64_t offset, int whence)
 	return -1;
 }
 
-static int IOWriteFunc(void *data, uint8_t *buf, int buf_size)
+int IOWriteFunc(void *data, uint8_t *buf, int buf_size)
 {
 	return -1;
 }
@@ -89,9 +75,6 @@ CustomIOContext::CustomIOContext() {
 	_videoBufferSize = 0;
 	_bufferSize = 16384;
 	_pos = 0;
-	_audioPts = 0.0;
-	_videoPts = 0.0;
-	_syncOffset = 0;
 	_buffer = (uint8_t*)av_malloc(_bufferSize);
 	_ioCtx = nullptr;
 	_ioCtx = avio_alloc_context(
