@@ -83,6 +83,11 @@ void PlaylistSegment::loadSegment()
     }
     std::vector<uint8_t> tempBuffer;
     CURLcode res;
+    int64_t lastSlash = _baseUrl.find_last_of('/');
+    if(lastSlash > 0)
+        _baseUrl = _baseUrl.substr(0, lastSlash + 1);
+    //std::cout << "baseUrl:" << _baseUrl << std::endl;
+    //std::cout << "endpoint:" << _endpoint << std::endl;
     curl_easy_setopt(curl, CURLOPT_URL, (this->_baseUrl + this->_endpoint).c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, BinaryCallback);

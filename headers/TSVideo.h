@@ -86,6 +86,7 @@ class TSVideo
         inline double getAudioPts(){return _ioCtx->_audioPts;};
         inline int32_t getAudioQueueSize(){return _audioQueue->size();};
         inline int32_t getVideoQueueSize(){return _videoQueue->size();};
+        uint32_t getSeconds();
         inline void enqueueVideo(AVPacket packet)
         {
             SDL_LockMutex(_videoQueueMutex);

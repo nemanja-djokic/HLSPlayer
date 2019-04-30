@@ -5,6 +5,11 @@
 int main(int argc, char* argv[])
 {
     HlsUtil util("http://localhost:8080/BigBuckBunny");
+    //HlsUtil util("http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8");
+    //HlsUtil util("https://mnmedias.api.telequebec.tv/m3u8/29880.m3u8");
+    //HlsUtil util("http://qthttp.apple.com.edgesuite.net/1010qwoeiuryfg/sl.m3u8");
+    //HlsUtil util("https://bitdash-a.akamaihd.net/content/MI201109210084_1/m3u8s/f08e80da-bf1d-4e3d-8899-f0f6155f6efa.m3u8");
+    //HlsUtil util("http://content.jwplatform.com/manifests/vM7nH0Kl.m3u8");
     int res = util.readRootPlaylist();
     if(res == OK)
         std::cout << "OK" << std::endl;

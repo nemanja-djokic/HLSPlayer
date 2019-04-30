@@ -8,6 +8,7 @@
 const std::string Playlist::EXT_X_TARGETDURATION_TAG = "#EXT-X-TARGETDURATION:";
 const std::string Playlist::EXT_X_MEDIA_SEQUENCE_TAG = "#EXT-X-TARGETDURATION:";
 const std::string Playlist::EXT_X_ENDLIST_TAG = "#EXT-X-ENDLIST";
+const std::string Playlist::EXTINF_TAG = "#EXTINF:";
 
 Playlist* Playlist::parsePlaylist(std::string content, std::string baseUrl)
 {
@@ -18,13 +19,23 @@ Playlist* Playlist::parsePlaylist(std::string content, std::string baseUrl)
     int segmentCounter = 0;
     for(std::string line; std::getline(iss, line, '\n'); lineCount++)
     {
+        line = HlsUtil::trim(line);
         if(line.empty() || line.compare("\n") == 0 || line.compare("\r\n") == 0)
             continue;
         if(line.c_str()[line.length() - 1] == '\r')
             line = line.substr(0, line.length() - 1); //HAX
+        line = HlsUtil::trim(line);
         if(lineCount == 0 && line.compare(MASTER_PLAYLIST_FIRST_LINE) != 0)
         {
-            std::cerr << "MASTER_PLAYLIST_FIRST_LINE NOT FOUND" << std::endl;
+            if(lineCount == 0)
+                std::cout << "lineCount 0" << std::endl;
+            if(line.compare(MASTER_PLAYLIST_FIRST_LINE) != 0)
+            {
+                std::cout << "comparing:" << std::endl;
+                std::cout << line << std::endl;
+                std::cout << MASTER_PLAYLIST_FIRST_LINE << std::endl;
+            }
+            std::cerr << "MASTER_PLAYLIST_FIRST_LINE_NOT FOUND" << std::endl;
             delete toReturn;
             return nullptr;
         }
@@ -46,7 +57,7 @@ Playlist* Playlist::parsePlaylist(std::string content, std::string baseUrl)
                 {
                     toReturn->_isEnded = true;
                 }
-                else
+                else if(line.rfind(EXTINF_TAG, 0) == 0)
                 {
                     std::string nextLine;
                     std::getline(iss, nextLine, '\n');

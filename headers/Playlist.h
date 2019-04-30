@@ -16,6 +16,7 @@ class Playlist
         static const std::string EXT_X_TARGETDURATION_TAG;
         static const std::string EXT_X_MEDIA_SEQUENCE_TAG;
         static const std::string EXT_X_ENDLIST_TAG;
+        static const std::string EXTINF_TAG;
 
         //Takes fully read content of the playlist endpoint
         static Playlist* parsePlaylist(std::string, std::string);

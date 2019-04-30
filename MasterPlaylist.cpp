@@ -17,13 +17,23 @@ MasterPlaylist* MasterPlaylist::parseMasterPlaylist(std::string hlsRoot, std::st
     toReturn->_rootPlaylistUrl = rootUrl;
     for(std::string line; std::getline(iss, line, '\n'); lineCount++)
     {
+        line = HlsUtil::trim(line);
         if(line.empty() || line.compare("\n") == 0 || line.compare("\r\n") == 0)
             continue;
         if(line.c_str()[line.length() - 1] == '\r')
             line = line.substr(0, line.length() - 1); //HAX
+        line = HlsUtil::trim(line);
         if(lineCount == 0 && line.compare(MASTER_PLAYLIST_FIRST_LINE) != 0)
         {
-            std::cerr << "MASTER_PLAYLIST_FIRST_LINE NOT FOUND" << std::endl;
+            if(lineCount == 0)
+                std::cerr << "lineCount 0" << std::endl;
+            if(line.compare(MASTER_PLAYLIST_FIRST_LINE) != 0)
+            {
+                std::cout << "comparing:" << std::endl;
+                std::cout << line << std::endl;
+                std::cout << MASTER_PLAYLIST_FIRST_LINE << std::endl;
+            }
+            std::cerr << "MASTER_PLAYLIST_FIRST_LINE_NOT_FOUND" << std::endl;
             delete toReturn;
             return nullptr;
         }
@@ -31,6 +41,7 @@ MasterPlaylist* MasterPlaylist::parseMasterPlaylist(std::string hlsRoot, std::st
         {
             try
             {
+                line = HlsUtil::trim(line);
                 if(line.rfind(ExtXStreamInf::ID_TAG, 0) == 0)
                 {
                     std::string nextLine;
@@ -107,17 +118,49 @@ std::string MasterPlaylist::getPlaylistContent(std::string endpoint)
     return tempBuffer;
 }
 
+bool hasEnding (std::string const &fullString, std::string const &ending)
+{
+    if (fullString.length() >= ending.length()) {
+        return (0 == fullString.compare (fullString.length() - ending.length(), ending.length(), ending));
+    } else {
+        return false;
+    }
+}
+
 Playlist* MasterPlaylist::getPlaylistForBitrate(int bitrate)
 {
+    if(hasEnding(_rootPlaylistUrl, ".m3u8"))
+    {
+        int lastSlash = _rootPlaylistUrl.find_last_of('/');
+        _rootPlaylistUrl = _rootPlaylistUrl.substr(0, lastSlash);
+    }
     if(this->_rootPlaylistUrl[_rootPlaylistUrl.length() - 1] != '/')
         _rootPlaylistUrl = _rootPlaylistUrl + "/";
     for(std::vector<ExtXStreamInf>::iterator it = this->_extXStreamInf.begin(); it != this->_extXStreamInf.end(); ++it)
     {
         if(std::stoi(it->getBandwidth()) == bitrate)
+        {
+            std::string endpointToPass = _rootPlaylistUrl;
+            if(it->getEndpoint().rfind("http", 0) == 0)
+            {
+                endpointToPass = it->getEndpoint();
+            }
+            else
+            {
+                int64_t slashPos = it->getEndpoint().find_last_of('/');
+                if(slashPos != -1)
+                {
+                    endpointToPass += it->getEndpoint().substr(0, slashPos + 1);
+                }
+            }
+            std::cout << "rootPlaylistUrl:" << _rootPlaylistUrl << std::endl;
+            std::cout << "itEndpoint:" << it->getEndpoint() << std::endl;
+            std::cout << "endpointToPass:" << endpointToPass << std::endl;
             return Playlist::parsePlaylist(getPlaylistContent(
                 ((it->getEndpoint().rfind("http", 0) == 0)?(it->getEndpoint()):(this->_rootPlaylistUrl + it->getEndpoint()))),
-                _rootPlaylistUrl
+                endpointToPass
                 );
+        }
     }
     return nullptr;
 }

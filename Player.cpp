@@ -65,9 +65,11 @@ void Player::loadSegments()
     TSVideo* toInsertVideo = new TSVideo((*_playlist->getSegments())[_playlist->getSegments()->size() - 1].getEndpoint());
     for(unsigned int i = 0; i < (*_playlist->getSegments()).size(); i++)
     {
+        std::cout << "Loading segment: " << i << std::endl;
         (*_playlist->getSegments())[i].loadSegment();
         uint8_t* segmentPayload = (*_playlist->getSegments())[i].getTsData();
         size_t payloadSize = (*_playlist->getSegments())[i].loadedSize();
+        std::cout << "payloadSize:" << payloadSize << std::endl;
         for(size_t j = 0; j < payloadSize / TS_BLOCK_SIZE; j++)
         {
             toInsertVideo->appendData(segmentPayload + j * TS_BLOCK_SIZE, TS_BLOCK_SIZE, (i==0)?true:false, 
@@ -265,7 +267,8 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
             {
                 waitingForKeyFrame = false;
             }
-            uint32_t seconds = _pFrame->pts / 100000;
+            //uint32_t seconds = _pFrame->pts / 100000;
+            uint32_t seconds = current->getSeconds();
             std::stringstream timestampString;
             timestampString << std::setfill('0') << std::setw(2) << seconds / 60 << ":" << std::setfill('0') << std::setw(2)  << seconds % 60
             << " / " << std::setfill('0') << std::setw(2) << current->getFullDuration() / 60 << ":" << std::setfill('0') << std::setw(2)
@@ -352,6 +355,8 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
         current->refreshTimer(*packet);
         int32_t endTicks = SDL_GetTicks();
         int32_t delay = (1000.0 / av_q2d(codecContext->framerate)) - (endTicks - startTicks);
+        delay = (delay < 0)?0:delay;
+        if(delay == 0)delay = (_pFrame->pts - _pFrame->pkt_dts);
         delay = (delay < 0)?0:delay;
         SDL_Delay(delay);
     }

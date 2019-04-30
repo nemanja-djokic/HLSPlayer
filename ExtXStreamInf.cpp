@@ -1,4 +1,5 @@
 #include "headers/ExtXStreamInf.h"
+#include "headers/HlsUtil.h"
 #include <sstream>
 #include <iostream>
 
@@ -24,6 +25,7 @@ ExtXStreamInf::ExtXStreamInf(std::string header, std::string endpoint)
     int lineCount = 0;
     for(std::string line; std::getline(iss, line, ','); lineCount++)
     {
+        line = HlsUtil::trim(line);
         std::istringstream attributeStream(line);
         for(std::string attributeName; std::getline(attributeStream, attributeName, '=');)
         {   
