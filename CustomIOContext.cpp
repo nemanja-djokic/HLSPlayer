@@ -12,15 +12,18 @@ static int IOReadFunc(void *data, uint8_t *buf, int buf_size)
     {
 		return AVERROR_EOF;
 	}
+	SDL_UnlockMutex(hctx->_bufferMutex);
 	int32_t toRead = (buf_size < 16384)?buf_size:16384;
 	toRead = (toRead < (hctx->_videoBufferSize - hctx->_pos))?toRead:(hctx->_videoBufferSize - hctx->_pos);
 	if(toRead <= 0)
 	{
 		std::cout << "toRead <= 0" << std::endl;
+		SDL_UnlockMutex(hctx->_bufferMutex);
 		return AVERROR_EOF;
 	}
 	memcpy(buf, hctx->_videoBuffer + hctx->_pos, toRead);
 	hctx->_pos += toRead;
+	SDL_UnlockMutex(hctx->_bufferMutex);
 	return toRead;
 }
 
@@ -46,6 +49,7 @@ static int64_t IOSeekFunc(void *data, int64_t offset, int whence)
 		std::cerr << "IO Context Missing" << std::endl;
 		return -1;
 	}
+	SDL_LockMutex(hctx->_bufferMutex);
 	if(whence == SEEK_SET)
 	{
 		hctx->_resetAudio = true;
@@ -53,19 +57,23 @@ static int64_t IOSeekFunc(void *data, int64_t offset, int whence)
 		if(offset < 0)
 		{
 			hctx->_pos = 0;
+			SDL_UnlockMutex(hctx->_bufferMutex);
 			return 0;
 		}
 		else if(offset > hctx->_videoBufferSize)
 		{
 			hctx->_pos = hctx->_videoBufferSize;
+			SDL_UnlockMutex(hctx->_bufferMutex);
 			return hctx->_pos;
 		}
 		else
 		{
 			hctx->_pos = offset;
+			SDL_UnlockMutex(hctx->_bufferMutex);
 			return offset;
 		}
 	}
+	SDL_UnlockMutex(hctx->_bufferMutex);
 	return -1;
 }
 
@@ -74,37 +82,13 @@ static int IOWriteFunc(void *data, uint8_t *buf, int buf_size)
 	return -1;
 }
 
-int AudioReadFunc(void *data, uint8_t *buf, int buf_size)
-{
-	CustomIOContext *hctx = (CustomIOContext*)data;
-	if(buf_size == 0)
-	{
-		return 0;
-	}
-	if (hctx->_audioPos >= hctx->_audioBufferSize)
-	{
-		return AVERROR_EOF;
-	}
-	int32_t toRead = buf_size;
-	toRead = (toRead < (hctx->_audioBufferSize - hctx->_audioPos))?toRead:(hctx->_audioBufferSize - hctx->_audioPos);
-	if(toRead <= 0)
-		return 0;
-
-	memset(buf, 0, buf_size);
-	SDL_MixAudio(buf, hctx->_audioBuffer + hctx->_audioPos, buf_size, SDL_MIX_MAXVOLUME);
-	hctx->_audioPos += toRead;
-	return toRead;
-}
-
 CustomIOContext::CustomIOContext() {
+	_bufferMutex = SDL_CreateMutex();
 	_videoBuffer = nullptr;
-	_audioBuffer = nullptr;
 	_resetAudio = false;
 	_videoBufferSize = 0;
-	_audioBufferSize = 0;
 	_bufferSize = 16384;
 	_pos = 0;
-	_audioPos = 0;
 	_audioPts = 0.0;
 	_videoPts = 0.0;
 	_syncOffset = 0;

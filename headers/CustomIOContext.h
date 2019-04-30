@@ -20,6 +20,8 @@ extern "C"
 
 class CustomIOContext {
 public:
+    SDL_mutex* _bufferMutex;
+
     bool _resetAudio;
     AVIOContext* _ioCtx;
 	uint8_t* _buffer;
@@ -31,10 +33,6 @@ public:
     double _videoPts;
     double _audioPts;
     int32_t _syncOffset;
-
-    uint8_t* _audioBuffer;
-    int _audioBufferSize;
-    int32_t _audioPos;
 
 	CustomIOContext();
 	~CustomIOContext();

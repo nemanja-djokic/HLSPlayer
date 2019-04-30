@@ -183,11 +183,11 @@ bool wasReset = false;
 void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSVideo* current, SwrContext* _swrCtx)
 {
     SDL_PauseAudio(0);
-    AVFrame* _pFrame = av_frame_alloc();
     int32_t framesToSkip = 0;
     while(audioThreadRunning)
     {
         SDL_SemWait(audioSemaphore);
+        AVFrame* _pFrame = av_frame_alloc();
         AVPacket* packet = current->dequeueAudio();
         if(packet == nullptr)
             continue;
@@ -241,6 +241,7 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
             }
         }
         av_free(outBuffer);
+        //av_free(packet);
     }
 }
 
@@ -267,8 +268,7 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
             {
                 waitingForKeyFrame = false;
             }
-            //uint32_t seconds = _pFrame->pts / 100000;
-            uint32_t seconds = current->getSeconds();
+            uint32_t seconds = _pFrame->pts / 100000;
             std::stringstream timestampString;
             timestampString << std::setfill('0') << std::setw(2) << seconds / 60 << ":" << std::setfill('0') << std::setw(2)  << seconds % 60
             << " / " << std::setfill('0') << std::setw(2) << current->getFullDuration() / 60 << ":" << std::setfill('0') << std::setw(2)
@@ -313,6 +313,8 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
             
             SDL_RenderCopy(_playerRenderer, screenPrint, nullptr, &messageRect);
             SDL_RenderPresent(_playerRenderer);
+            SDL_DestroyTexture(screenPrint);
+            SDL_FreeSurface(text);
         }
         else
         {
@@ -349,6 +351,8 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
             );
             SDL_RenderCopy(_playerRenderer, screenPrint, nullptr, &messageRect);
             SDL_RenderPresent(_playerRenderer);
+            SDL_DestroyTexture(screenPrint);
+            SDL_FreeSurface(text);
 
         }
         
@@ -360,6 +364,8 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
         delay = (delay < 0)?0:delay;
         SDL_Delay(delay);
     }
+    //av_free(packet);
+    av_free(_pFrame);
 }
 
 bool Player::playNext()

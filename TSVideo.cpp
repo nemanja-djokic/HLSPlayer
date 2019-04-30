@@ -12,9 +12,9 @@ extern "C"
 
 TSVideo::TSVideo(std::string fname)
 {
+    this->_ioCtx = new CustomIOContext();
     this->_fname = fname;
     this->_formatContext = nullptr;
-    this->_ioCtx = nullptr;
     this->_videoCodec = nullptr;
     this->_audioCodec = nullptr;
     _lastTimestamp = -1;
@@ -57,6 +57,7 @@ void TSVideo::appendData(uint8_t* buffer, size_t len, bool isFirst, bool wholeBl
         this->_videoPayload.insert(this->_videoPayload.end(), buffer[i]);
         this->_hasData = true;
     }
+    SDL_LockMutex(_ioCtx->_bufferMutex);
     _blockBufferSize += len;
     if(wholeBlock)
     {
@@ -72,6 +73,7 @@ void TSVideo::appendData(uint8_t* buffer, size_t len, bool isFirst, bool wholeBl
         this->_tsBlockBegin->push_back(_ioCtx->_videoBufferSize);
         delete[] helpBuffer;
     }
+    SDL_UnlockMutex(_ioCtx->_bufferMutex);
 }
 
 void TSVideo::finalizeLoading()
@@ -84,15 +86,6 @@ void TSVideo::finalizeLoading()
     delete[] helpBuffer;
 }
 
-void TSVideo::appendAudio(uint8_t* buffer, size_t len)
-{
-    uint8_t* helpBuffer = (uint8_t*)av_malloc(_ioCtx->_audioBufferSize + len);
-    memcpy(helpBuffer, _ioCtx->_audioBuffer, _ioCtx->_audioBufferSize);
-    memcpy(helpBuffer + _ioCtx->_audioBufferSize, buffer, len);
-    av_free(_ioCtx->_audioBuffer);
-    _ioCtx->_audioBuffer = helpBuffer;
-    _ioCtx->_audioBufferSize += len;
-}
 
 void TSVideo::sizeAccumulate()
 {
@@ -122,7 +115,6 @@ void TSVideo::prepareFile()
     size_t size = this->_videoPayload.size();
     uint8_t* payload = new uint8_t[size];
     std::copy(_videoPayload.begin(), _videoPayload.end(), payload);
-    this->_ioCtx = new CustomIOContext();
     this->_ioCtx->_videoBuffer = (uint8_t*)av_malloc(_videoPayload.size());
     memcpy(this->_ioCtx->_videoBuffer, payload, _videoPayload.size());
     this->_ioCtx->_videoBufferSize = _videoPayload.size();
