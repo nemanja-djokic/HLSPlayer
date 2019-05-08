@@ -3,6 +3,7 @@
 
 #include "Playlist.h"
 #include "TSVideo.h"
+#include "NetworkManager.h"
 #include <vector>
 
 extern "C"  

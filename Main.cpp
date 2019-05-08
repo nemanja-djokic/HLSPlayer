@@ -29,6 +29,7 @@ int main(int argc, char* argv[])
     std::vector<PlaylistSegment> segments = *playlist->getSegments();
     std::cout << segments.size() << std::endl;
     Player player(playlist);
+
     while(player.playNext());
     delete playlist;
     return 0;

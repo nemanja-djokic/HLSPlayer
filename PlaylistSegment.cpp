@@ -1,6 +1,13 @@
 #include "headers/PlaylistSegment.h"
 #include "headers/Constants.h"
-#include "curl/curl.h"
+
+extern "C"
+{
+    #include "curl/curl.h"
+    #include "SDL2/SDL.h"
+}
+
+
 #include <ostream>
 #include <iostream>
 #include <vector>
@@ -18,10 +25,13 @@ size_t BinaryCallback(void*, size_t, size_t, void*);
 
 PlaylistSegment::PlaylistSegment(int num, std::string header, std::string endpoint, std::string baseUrl)
 {
+    this->_downloadMutex = SDL_CreateMutex();
     this->_num = num;
     this->_endpoint = endpoint;
     this->_isLoaded = false;
     this->_baseUrl = baseUrl;
+    this->_tsDataSize = 0;
+    this->_tsData = nullptr;
 
     if(header.rfind(EXTINF_TAG, 0) == 0)
     {
@@ -67,11 +77,13 @@ PlaylistSegment::PlaylistSegment(int num, std::string header, std::string endpoi
 
 PlaylistSegment::~PlaylistSegment()
 {
-    this->unloadSegment();
+
 }
 
 void PlaylistSegment::loadSegment()
 {
+    SDL_LockMutex(_downloadMutex);
+    if(this->_isLoaded) return;
     bool loadFailed = false;
     CURL* curl = curl_easy_init();
     if(!curl)
@@ -86,12 +98,11 @@ void PlaylistSegment::loadSegment()
     int64_t lastSlash = _baseUrl.find_last_of('/');
     if(lastSlash > 0)
         _baseUrl = _baseUrl.substr(0, lastSlash + 1);
-    //std::cout << "baseUrl:" << _baseUrl << std::endl;
-    //std::cout << "endpoint:" << _endpoint << std::endl;
     curl_easy_setopt(curl, CURLOPT_URL, (this->_baseUrl + this->_endpoint).c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, BinaryCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &tempBuffer);
+    uint32_t startTicks = SDL_GetTicks();
     res = curl_easy_perform(curl);
 
     if(res != CURLE_OK)
@@ -103,23 +114,32 @@ void PlaylistSegment::loadSegment()
     }
     if(!loadFailed)
     {
+        uint32_t endTicks = SDL_GetTicks();
+        uint32_t miliseconds = endTicks - startTicks;
         this->_tsData = new uint8_t[tempBuffer.size()];
+        uint32_t bitPerMs = tempBuffer.size() / miliseconds;
+        bitPerMs = bitPerMs;
         this->_tsDataSize = tempBuffer.size();
         std::copy(tempBuffer.begin(), tempBuffer.end(), this->_tsData);
-        //std::cout << "segment " << this->_num << " loaded " << this->_tsDataSize / TS_BLOCK_SIZE << " blocks overflow: " << this->_tsDataSize % TS_BLOCK_SIZE << std::endl;
         this->_isLoaded = true;
     }
+    SDL_UnlockMutex(_downloadMutex);
 }
 
 void PlaylistSegment::unloadSegment()
 {
+    SDL_LockMutex(_downloadMutex);
     if(this->_isLoaded)
     {
-        this->_isLoaded = false;
-        if(_tsData)
+        if(_tsData != nullptr)
+        {
             delete[] _tsData;
+            this->_tsData = nullptr;
+        }
         this->_tsDataSize = 0;
+        this->_isLoaded = false;
     }
+    SDL_UnlockMutex(_downloadMutex);
 }
 
 std::ostream& operator<<(std::ostream& stream, const PlaylistSegment& a)

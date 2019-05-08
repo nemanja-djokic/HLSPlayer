@@ -8,23 +8,40 @@ extern "C"
 int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 {
 	CustomIOContext *hctx = (CustomIOContext*)data;
-	if (hctx->_pos >= hctx->_videoBufferSize)
-    {
-		return AVERROR_EOF;
-	}
-	SDL_UnlockMutex(hctx->_bufferMutex);
-	int32_t toRead = (buf_size < 16384)?buf_size:16384;
-	toRead = (toRead < (hctx->_videoBufferSize - hctx->_pos))?toRead:(hctx->_videoBufferSize - hctx->_pos);
-	if(toRead <= 0)
+	if(hctx->_block == 0 && hctx->_pos == 0)
 	{
-		std::cout << "toRead <= 0" << std::endl;
-		SDL_UnlockMutex(hctx->_bufferMutex);
+		PlaylistSegment* currentSegment = hctx->_videoSegments.at(0);
+		currentSegment->loadSegment();
+	}
+	if(hctx->_block >= (int32_t)hctx->_videoSegments.size())
+	{
+		std::cout << "RETURNING EOF BLOCK" << std::endl;
 		return AVERROR_EOF;
 	}
-	memcpy(buf, hctx->_videoBuffer + hctx->_pos, toRead);
-	hctx->_pos += toRead;
+	SDL_LockMutex(hctx->_bufferMutex);
+	int64_t pos = hctx->_pos;
+	PlaylistSegment* currentSegment = hctx->_videoSegments.at(hctx->_block);
+	if(!currentSegment->getIsLoaded())currentSegment->loadSegment();
+	if(pos + buf_size < (int)currentSegment->loadedSize())
+	{
+		memcpy(buf, currentSegment->getTsData() + pos, buf_size);
+		hctx->_pos += buf_size;
+		SDL_UnlockMutex(hctx->_bufferMutex);
+		return buf_size;
+	}
+	else
+	{
+		memcpy(buf, currentSegment->getTsData() + pos, currentSegment->loadedSize() - pos);
+		hctx->_pos = 0;
+		hctx->_block++;
+		hctx->_networkManager->updateCurrentSegment(hctx->_block);
+		SDL_SemPost(hctx->_networkManager->getBlockEndSemaphore());
+		SDL_UnlockMutex(hctx->_bufferMutex);
+		return currentSegment->loadedSize() - pos;
+	}
+	std::cout << "returning 0" << std::endl;
 	SDL_UnlockMutex(hctx->_bufferMutex);
-	return toRead;
+	return 0;
 }
 
 int64_t IOSeekFunc(void *data, int64_t offset, int whence)
@@ -40,27 +57,15 @@ int64_t IOSeekFunc(void *data, int64_t offset, int whence)
 	{
 		hctx->_resetAudio = true;
 		avio_flush(hctx->_ioCtx);
-		if(offset < 0)
-		{
-			hctx->_pos = 0;
-			SDL_UnlockMutex(hctx->_bufferMutex);
-			return 0;
-		}
-		else if(offset > hctx->_videoBufferSize)
-		{
-			hctx->_pos = hctx->_videoBufferSize;
-			SDL_UnlockMutex(hctx->_bufferMutex);
-			return hctx->_pos;
-		}
-		else
-		{
-			hctx->_pos = offset;
-			SDL_UnlockMutex(hctx->_bufferMutex);
-			return offset;
-		}
+		hctx->_block = hctx->_blockToSeek;
+		hctx->_pos = 0;
+		hctx->_networkManager->updateCurrentSegment(hctx->_block);
+		SDL_SemPost(hctx->_networkManager->getBlockEndSemaphore());
+		SDL_UnlockMutex(hctx->_bufferMutex);
+		return hctx->_block * hctx->_pos;
 	}
 	SDL_UnlockMutex(hctx->_bufferMutex);
-	return -1;
+	return 0;
 }
 
 int IOWriteFunc(void *data, uint8_t *buf, int buf_size)
@@ -70,11 +75,10 @@ int IOWriteFunc(void *data, uint8_t *buf, int buf_size)
 
 CustomIOContext::CustomIOContext() {
 	_bufferMutex = SDL_CreateMutex();
-	_videoBuffer = nullptr;
 	_resetAudio = false;
-	_videoBufferSize = 0;
 	_bufferSize = 16384;
 	_pos = 0;
+	_block = 0;
 	_buffer = (uint8_t*)av_malloc(_bufferSize);
 	_ioCtx = nullptr;
 	_ioCtx = avio_alloc_context(
@@ -90,7 +94,6 @@ CustomIOContext::CustomIOContext() {
 CustomIOContext::~CustomIOContext()
 {
 	av_free(_buffer);
-	av_free(_videoBuffer);
 	av_free(_ioCtx);
 }
 
@@ -103,4 +106,9 @@ void CustomIOContext::initAVFormatContext(AVFormatContext *pCtx) {
 	probeData.buf_size = _bufferSize - 1;
 	probeData.filename = "";
 	pCtx->iformat = av_probe_input_format(&probeData, 1);
+}
+
+void CustomIOContext::appendSegment(PlaylistSegment* segment)
+{
+	_videoSegments.insert(_videoSegments.end(), segment);
 }

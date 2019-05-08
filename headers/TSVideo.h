@@ -46,21 +46,21 @@ class TSVideo
     public:
         TSVideo(std::string);
         ~TSVideo();
+        friend class Player;
         uint32_t getFullDuration();
         inline uint32_t getLastTimestamp(){return _lastTimestamp;};
         inline void setLastTimestamp(uint32_t timestamp){_lastTimestamp = timestamp;};
         inline bool isSaved(){return _isSaved;};
         inline TTF_Font* getFont(){return font;};
-        void appendData(uint8_t*, size_t, bool, bool, double);
+        void appendSegment(PlaylistSegment*);
         inline bool getHasData(){return _hasData;};
         inline size_t getSize(){return _videoPayload.size();};
         uint8_t* getPayload();
-        void prepareFile();
         inline std::string getFname(){return _fname;};
-        void prepareFormatContext(AVFormatContext*);
+        void prepareFormatContext();
         inline AVFormatContext* getFormatContext(){return _formatContext;};
-        void seek(int64_t, int64_t);
-        void finalizeLoading();
+        void seek(int64_t, int64_t, int64_t);
+        inline int32_t getCurrentPlayingSegment(){return _ioCtx->_block;};
         inline bool isResetAudio(){return _ioCtx->isResetAudio();};
         inline void clearResetAudio(){_ioCtx->clearResetAudio();};
         inline void clearAudioPackets()

@@ -1,6 +1,11 @@
 #ifndef _PSEGMENT_H_
 #define _PSEGMENT_H_
 
+extern "C"
+{
+    #include "SDL2/SDL_mutex.h"
+}
+
 #include <string>
 #include <vector>
 
@@ -19,6 +24,8 @@ class PlaylistSegment
         uint8_t* _tsData;
         size_t _tsDataSize;
         bool _isLoaded;
+
+        SDL_mutex* _downloadMutex;
 
         std::string _baseUrl;
         std::string _endpoint;

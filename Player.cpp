@@ -16,11 +16,6 @@ extern "C"
 
 void AudioReadFunc(void*, uint8_t*, int);
 
-void loadSegmentsThread(Player* player)
-{
-    player->loadSegments();
-}
-
 const uint32_t Player::VIDEO_PID_VAL = 0x100;
 const uint32_t Player::AUDIO_PID_VAL = 0x101;
 const uint32_t Player::PID_MASK = 0x1fff00;
@@ -50,7 +45,7 @@ Player::Player(Playlist* playlist)
     _audioStream = -1;
     _pFrameYUV = av_frame_alloc();
     TTF_Init();
-    std::thread(loadSegmentsThread, this).detach();
+    loadSegments();
     av_log_set_level(AV_LOG_PANIC);
 }
 
@@ -61,29 +56,18 @@ Player::~Player()
 
 void Player::loadSegments()
 {
-    AVFormatContext* lastFormatContext = nullptr;
     TSVideo* toInsertVideo = new TSVideo((*_playlist->getSegments())[_playlist->getSegments()->size() - 1].getEndpoint());
     for(unsigned int i = 0; i < (*_playlist->getSegments()).size(); i++)
     {
-        (*_playlist->getSegments())[i].loadSegment();
-        uint8_t* segmentPayload = (*_playlist->getSegments())[i].getTsData();
-        size_t payloadSize = (*_playlist->getSegments())[i].loadedSize();
-        for(size_t j = 0; j < payloadSize / TS_BLOCK_SIZE; j++)
-        {
-            toInsertVideo->appendData(segmentPayload + j * TS_BLOCK_SIZE, TS_BLOCK_SIZE, (i==0)?true:false, 
-                (j == 0)?true:false, (*_playlist->getSegments())[i].getExtInf());
-        }
-        toInsertVideo->sizeAccumulate();
-        if(i == 0)
-        {
-            toInsertVideo->prepareFile();
-            toInsertVideo->prepareFormatContext(lastFormatContext);
-            this->_tsVideo.push_back(toInsertVideo);
-        }
+        toInsertVideo->appendSegment(&_playlist->getSegments()->at(i));
     }
-    toInsertVideo->finalizeLoading();
+    this->_tsVideo.push_back(toInsertVideo);
+    toInsertVideo->prepareFormatContext();
+	toInsertVideo->_ioCtx->_networkManager = new NetworkManager(&toInsertVideo->_ioCtx->_videoSegments, 10, 3);
+	toInsertVideo->_ioCtx->_networkManager->start();
 }
 
+SDL_mutex* audioMutex = SDL_CreateMutex();
 static uint8_t *audio_chunk; 
 static uint32_t audio_len; 
 static uint8_t *audio_pos;
@@ -92,15 +76,19 @@ bool playbackCompleted = false;
 
 void  fill_audio(void* udata, uint8_t *stream, int len)
 {
+    SDL_LockMutex(audioMutex);
 	SDL_memset(stream, 0, len);
 	if(audio_len == 0)
+    {
+        SDL_UnlockMutex(audioMutex);
 		return; 
-
+    }
 	len = ((uint32_t)len>audio_len ? audio_len : len);
 
 	SDL_MixAudio(stream, audio_pos, len, SDL_MIX_MAXVOLUME);
 	audio_pos += len; 
-	audio_len -= len; 
+    audio_len -= len;
+    SDL_UnlockMutex(audioMutex);
 }
 
 uint32_t lastPoll = 0;
@@ -139,32 +127,32 @@ bool Player::pollEvent(SDL_Event event, TSVideo* actual)
                 }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_LEFT)
                 {
-                    actual->seek(-15, SEEK_CUR);
+                    actual->seek(-15, SEEK_CUR, actual->getLastTimestamp());
                 }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_RIGHT)
                 {
-                    actual->seek(15, SEEK_CUR);
+                    actual->seek(15, SEEK_CUR, actual->getLastTimestamp());
                 }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_0 || event.key.keysym.scancode == SDL_SCANCODE_KP_0)
-                    actual->seek(0, SEEK_SET);
+                    actual->seek(0, SEEK_SET, actual->getLastTimestamp());
                 else if(event.key.keysym.scancode == SDL_SCANCODE_1 || event.key.keysym.scancode == SDL_SCANCODE_KP_1)
-                    actual->seek(1, SEEK_SET);
+                    actual->seek(1, SEEK_SET, actual->getLastTimestamp());
                 else if(event.key.keysym.scancode == SDL_SCANCODE_2 || event.key.keysym.scancode == SDL_SCANCODE_KP_2)
-                    actual->seek(2, SEEK_SET);
+                    actual->seek(2, SEEK_SET, actual->getLastTimestamp());
                 else if(event.key.keysym.scancode == SDL_SCANCODE_3 || event.key.keysym.scancode == SDL_SCANCODE_KP_3)
-                    actual->seek(3, SEEK_SET);
+                    actual->seek(3, SEEK_SET, actual->getLastTimestamp());
                 else if(event.key.keysym.scancode == SDL_SCANCODE_4 || event.key.keysym.scancode == SDL_SCANCODE_KP_4)
-                    actual->seek(4, SEEK_SET);
+                    actual->seek(4, SEEK_SET, actual->getLastTimestamp());
                 else if(event.key.keysym.scancode == SDL_SCANCODE_5 || event.key.keysym.scancode == SDL_SCANCODE_KP_5)
-                    actual->seek(5, SEEK_SET);
+                    actual->seek(5, SEEK_SET, actual->getLastTimestamp());
                 else if(event.key.keysym.scancode == SDL_SCANCODE_6 || event.key.keysym.scancode == SDL_SCANCODE_KP_6)
-                    actual->seek(6, SEEK_SET);
+                    actual->seek(6, SEEK_SET, actual->getLastTimestamp());
                 else if(event.key.keysym.scancode == SDL_SCANCODE_7 || event.key.keysym.scancode == SDL_SCANCODE_KP_7)
-                    actual->seek(7, SEEK_SET);
+                    actual->seek(7, SEEK_SET, actual->getLastTimestamp());
                 else if(event.key.keysym.scancode == SDL_SCANCODE_8 || event.key.keysym.scancode == SDL_SCANCODE_KP_8)
-                    actual->seek(8, SEEK_SET);
+                    actual->seek(8, SEEK_SET, actual->getLastTimestamp());
                 else if(event.key.keysym.scancode == SDL_SCANCODE_9 || event.key.keysym.scancode == SDL_SCANCODE_KP_9)
-                    actual->seek(9, SEEK_SET);
+                    actual->seek(9, SEEK_SET, actual->getLastTimestamp());
             }
         default:  
             break;  
@@ -206,6 +194,7 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
             swr_convert(_swrCtx, &outBuffer, outBufferSize, (const uint8_t **)_pFrame->data, _pFrame->nb_samples);
         }
             
+        SDL_LockMutex(audioMutex);
         if(current->isResetAudio())
         {
             audio_clear = true;
@@ -236,8 +225,8 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
                 framesToSkip--;
             }
         }
+        SDL_UnlockMutex(audioMutex);
         av_free(outBuffer);
-        //av_free(packet);
     }
 }
 
@@ -266,8 +255,8 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
             }
             uint32_t seconds = _pFrame->pts / 100000;
             std::stringstream timestampString;
-            timestampString << std::setfill('0') << std::setw(2) << seconds / 60 << ":" << std::setfill('0') << std::setw(2)  << seconds % 60
-            << " / " << std::setfill('0') << std::setw(2) << current->getFullDuration() / 60 << ":" << std::setfill('0') << std::setw(2)
+            timestampString << seconds / 3600 << ":" << std::setfill('0') << std::setw(2) << (seconds % 3600) / 60 << ":" << std::setfill('0') << std::setw(2)  << seconds % 60
+            << " / " << current->getFullDuration() / 3600 << ":" << std::setfill('0') << std::setw(2) << (current->getFullDuration() % 3600) / 60 << ":" << std::setfill('0') << std::setw(2)
             << current->getFullDuration() % 60;
 
             current->setLastTimestamp(seconds);
@@ -426,7 +415,7 @@ bool Player::playNext()
         wantedSpec.format = AUDIO_S16;
         wantedSpec.channels = audioCodecContext->channels;
         wantedSpec.silence = 0;
-        wantedSpec.samples = 128;
+        wantedSpec.samples = 512;
         wantedSpec.callback = fill_audio;
         wantedSpec.userdata = current.getCustomIOContext();
         if(SDL_OpenAudio(&wantedSpec, &audioSpec) < 0)
@@ -440,7 +429,7 @@ bool Player::playNext()
     {
         _inChLayout = av_get_default_channel_layout(audioCodecContext->channels);
         _swrCtx = swr_alloc();
-        _swrCtx = swr_alloc_set_opts(_swrCtx, AV_CH_LAYOUT_MONO, AV_SAMPLE_FMT_S16, audioCodecContext->sample_rate, _inChLayout, audioCodecContext->sample_fmt,
+        _swrCtx = swr_alloc_set_opts(_swrCtx, audioCodecContext->channel_layout, AV_SAMPLE_FMT_S16, audioCodecContext->sample_rate, _inChLayout, audioCodecContext->sample_fmt,
             audioCodecContext->sample_rate, 0, nullptr);
         swr_init(_swrCtx);
     }
