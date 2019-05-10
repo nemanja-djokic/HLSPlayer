@@ -21,8 +21,14 @@ int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 	SDL_LockMutex(hctx->_bufferMutex);
 	int64_t pos = hctx->_pos;
 	PlaylistSegment* currentSegment = hctx->_videoSegments.at(hctx->_block);
-	if(!currentSegment->getIsLoaded())currentSegment->loadSegment();
-	if(pos + buf_size < (int)currentSegment->loadedSize())
+	if(!currentSegment->getIsLoaded())
+	{
+		hctx->_networkManager->updateCurrentSegment(hctx->_block);
+		SDL_SemPost(hctx->_networkManager->getBlockEndSemaphore());
+		std::cout << "Loading in read callback!" << std::endl;
+		currentSegment->loadSegment();
+	}
+	if(pos + buf_size <= (int)currentSegment->loadedSize())
 	{
 		memcpy(buf, currentSegment->getTsData() + pos, buf_size);
 		hctx->_pos += buf_size;
@@ -56,6 +62,7 @@ int64_t IOSeekFunc(void *data, int64_t offset, int whence)
 	if(whence == SEEK_SET)
 	{
 		hctx->_resetAudio = true;
+		hctx->_softResetAudio = true;
 		avio_flush(hctx->_ioCtx);
 		hctx->_block = hctx->_blockToSeek;
 		hctx->_pos = 0;
@@ -76,6 +83,7 @@ int IOWriteFunc(void *data, uint8_t *buf, int buf_size)
 CustomIOContext::CustomIOContext() {
 	_bufferMutex = SDL_CreateMutex();
 	_resetAudio = false;
+	_softResetAudio = false;
 	_bufferSize = 16384;
 	_pos = 0;
 	_block = 0;

@@ -67,6 +67,7 @@ void Player::loadSegments()
 	toInsertVideo->_ioCtx->_networkManager->start();
 }
 
+static int32_t volumeRate = 10;
 SDL_mutex* audioMutex = SDL_CreateMutex();
 static uint8_t *audio_chunk; 
 static uint32_t audio_len; 
@@ -85,7 +86,7 @@ void  fill_audio(void* udata, uint8_t *stream, int len)
     }
 	len = ((uint32_t)len>audio_len ? audio_len : len);
 
-	SDL_MixAudio(stream, audio_pos, len, SDL_MIX_MAXVOLUME);
+	SDL_MixAudio(stream, audio_pos, len, SDL_MIX_MAXVOLUME * volumeRate / 10);
 	audio_pos += len; 
     audio_len -= len;
     SDL_UnlockMutex(audioMutex);
@@ -153,6 +154,10 @@ bool Player::pollEvent(SDL_Event event, TSVideo* actual)
                     actual->seek(8, SEEK_SET, actual->getLastTimestamp());
                 else if(event.key.keysym.scancode == SDL_SCANCODE_9 || event.key.keysym.scancode == SDL_SCANCODE_KP_9)
                     actual->seek(9, SEEK_SET, actual->getLastTimestamp());
+                else if(event.key.keysym.scancode == SDL_SCANCODE_KP_PLUS)
+                    volumeRate = (volumeRate < 10)?volumeRate + 1 : volumeRate;
+                else if(event.key.keysym.scancode == SDL_SCANCODE_KP_MINUS)
+                    volumeRate = (volumeRate > 0)?volumeRate - 1 : volumeRate;
             }
         default:  
             break;  
@@ -206,6 +211,19 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
             audio_len = outBufferSize;
             audio_pos = audio_chunk;
             current->clearResetAudio();
+            current->clearSoftResetAudio();
+        }
+        else if(current->isSoftResetAudio())
+        {
+            audio_clear = true;
+            framesToSkip = current->getAudioQueueSize();
+            uint8_t* tempBuffer = (uint8_t*)av_mallocz(outBufferSize);
+            memcpy(tempBuffer, outBuffer, outBufferSize);
+            av_free(audio_chunk);
+            audio_chunk = (uint8_t*)tempBuffer;
+            audio_len = outBufferSize;
+            audio_pos = audio_chunk;
+            current->clearSoftResetAudio();
         }
         else
         {
@@ -225,6 +243,7 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
                 framesToSkip--;
             }
         }
+        current->setReferencePts(_pFrame->pts);
         SDL_UnlockMutex(audioMutex);
         av_free(outBuffer);
     }
@@ -343,11 +362,11 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
         int32_t endTicks = SDL_GetTicks();
         int32_t delay = (1000.0 / av_q2d(codecContext->framerate)) - (endTicks - startTicks);
         delay = (delay < 0)?0:delay;
-        if(delay == 0)delay = (_pFrame->pts - _pFrame->pkt_dts);
+        int32_t avDesync = (current->getReferencePts() - _pFrame->pts) / 9000;
+        if(avDesync > 1)delay += avDesync - 1;
         delay = (delay < 0)?0:delay;
         SDL_Delay(delay);
     }
-    //av_free(packet);
     av_free(_pFrame);
 }
 
@@ -480,8 +499,8 @@ bool Player::playNext()
     {
         SDL_GetCurrentDisplayMode(0, &displayMode);
         _playerWindow = SDL_CreateWindow("HLSPlayer",  
-        SDL_WINDOWPOS_UNDEFINED,  
-        SDL_WINDOWPOS_UNDEFINED,  
+        SDL_WINDOWPOS_UNDEFINED,
+        SDL_WINDOWPOS_UNDEFINED,
         displayMode.w,  displayMode.h,  
         0);
         if(!_playerWindow)

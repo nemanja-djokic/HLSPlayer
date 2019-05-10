@@ -92,6 +92,8 @@ void PlaylistSegment::loadSegment()
         this->_isLoaded = false;
         loadFailed = true;
         curl_easy_cleanup(curl);
+        SDL_UnlockMutex(_downloadMutex);
+        return;
     }
     std::vector<uint8_t> tempBuffer;
     CURLcode res;
@@ -111,14 +113,17 @@ void PlaylistSegment::loadSegment()
         this->_isLoaded = false;
         loadFailed = true;
         curl_easy_cleanup(curl);
+        SDL_UnlockMutex(_downloadMutex);
+        return;
     }
     if(!loadFailed)
     {
         uint32_t endTicks = SDL_GetTicks();
         uint32_t miliseconds = endTicks - startTicks;
         this->_tsData = new uint8_t[tempBuffer.size()];
-        uint32_t bitPerMs = tempBuffer.size() / miliseconds;
+        uint32_t bitPerMs = tempBuffer.size() * 8 / miliseconds;
         bitPerMs = bitPerMs;
+        //std::cout << (bitPerMs * 1000) / (1024 * 1024) << "Mbps" << std::endl;
         this->_tsDataSize = tempBuffer.size();
         std::copy(tempBuffer.begin(), tempBuffer.end(), this->_tsData);
         this->_isLoaded = true;
@@ -128,8 +133,8 @@ void PlaylistSegment::loadSegment()
 
 void PlaylistSegment::unloadSegment()
 {
-    SDL_LockMutex(_downloadMutex);
-    if(this->_isLoaded)
+    int status = SDL_TryLockMutex(_downloadMutex);
+    if(status == 0 && this->_isLoaded)
     {
         if(_tsData != nullptr)
         {
@@ -138,6 +143,10 @@ void PlaylistSegment::unloadSegment()
         }
         this->_tsDataSize = 0;
         this->_isLoaded = false;
+    }
+    else
+    {
+        return;
     }
     SDL_UnlockMutex(_downloadMutex);
 }

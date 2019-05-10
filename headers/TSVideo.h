@@ -24,8 +24,7 @@ class TSVideo
         bool _hasData;
         std::string _fname;
         bool _isSaved;
-        double _currentPts;
-        int64_t _currentPtsTime;
+        int32_t _currentReferencePts;
         std::vector<int32_t>* _tsBlockBegin;
         std::vector<double>* _tsBlockDuration;
         std::vector<int32_t>* _tsBlockSize;
@@ -55,7 +54,6 @@ class TSVideo
         void appendSegment(PlaylistSegment*);
         inline bool getHasData(){return _hasData;};
         inline size_t getSize(){return _videoPayload.size();};
-        uint8_t* getPayload();
         inline std::string getFname(){return _fname;};
         void prepareFormatContext();
         inline AVFormatContext* getFormatContext(){return _formatContext;};
@@ -63,13 +61,9 @@ class TSVideo
         inline int32_t getCurrentPlayingSegment(){return _ioCtx->_block;};
         inline bool isResetAudio(){return _ioCtx->isResetAudio();};
         inline void clearResetAudio(){_ioCtx->clearResetAudio();};
-        inline void clearAudioPackets()
-        {
-            while(_audioQueue->size() > 0)
-                _audioQueue->pop();
-        }
+        inline bool isSoftResetAudio(){return _ioCtx->_softResetAudio;};
+        inline void clearSoftResetAudio(){_ioCtx->_softResetAudio = false;};
         inline bool isBuffersSafe(){return _videoQueue->size() > 0 && _audioQueue->size() > 0;};
-        void sizeAccumulate();
         inline SDL_mutex* getVideoPlayerMutex(){return _videoPlayerMutex;};
         inline CustomIOContext* getCustomIOContext(){return _ioCtx;};
         inline void assignVideoCodec(AVCodecContext* videoCodec){_videoCodec = videoCodec;};
@@ -77,6 +71,8 @@ class TSVideo
         inline int32_t getAudioQueueSize(){return _audioQueue->size();};
         inline int32_t getVideoQueueSize(){return _videoQueue->size();};
         uint32_t getSeconds();
+        inline void setReferencePts(int32_t referencePts){_currentReferencePts = referencePts;};
+        inline int32_t getReferencePts(){return _currentReferencePts;};
         inline void enqueueVideo(AVPacket packet)
         {
             SDL_LockMutex(_videoQueueMutex);

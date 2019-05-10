@@ -48,8 +48,8 @@ void networkManagerThread(NetworkManager* networkManager)
             else if((int32_t)i > networkManager->_currentSegment)
             {
                 int32_t gain = networkManager->_maxPriority - (i - networkManager->_currentSegment) * networkManager->_priorityDecayGainRate;
-                if(gain > -networkManager->_maxPriority)
-                    networkManager->_videoSegmentWeights.at(i) += gain;
+                if(gain < -networkManager->_maxPriority)gain = -networkManager->_maxPriority;
+                networkManager->_videoSegmentWeights.at(i) += gain;
                 if(networkManager->_videoSegmentWeights.at(i) < 0)
                     networkManager->_videoSegmentWeights.at(i) = 0;
             }

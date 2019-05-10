@@ -51,19 +51,6 @@ TSVideo::~TSVideo()
     delete _audioQueue;
 }
 
-void TSVideo::sizeAccumulate()
-{
-    this->_tsBlockSize->push_back(_blockBufferSize);
-    _blockBufferSize = 0;
-}
-
-uint8_t* TSVideo::getPayload()
-{
-    uint8_t* out = new uint8_t[this->_videoPayload.size()];
-    std::copy(_videoPayload.begin(), _videoPayload.end(), out);
-    return out;
-}
-
 uint32_t TSVideo::getFullDuration()
 {
     double total = 0.0;
@@ -98,9 +85,60 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
     {
         if(whence == SEEK_CUR)
         {
-            int64_t seekTimestamp = currentTimestamp + offset;
+            //Completely broken due to incorrect Extinf data
+            /*int64_t seekTimestamp = currentTimestamp + offset;
             seekTimestamp = (seekTimestamp < 0)?0:(seekTimestamp > this->getFullDuration())?this->getFullDuration():seekTimestamp;
-            this->seek(seekTimestamp, SEEK_DATA, currentTimestamp);
+            this->seek(seekTimestamp, SEEK_DATA, currentTimestamp);*/
+            double currentBlockElapsed = this->_ioCtx->_pos * this->_tsBlockDuration->at(this->_ioCtx->_block) 
+            / this->_ioCtx->_videoSegments.at(this->_ioCtx->_block)->loadedSize();
+            double offsetFromCurrent = offset + currentBlockElapsed;
+            int64_t selectedBlock = this->_ioCtx->_block;
+            if(offsetFromCurrent < 0)
+            {
+                while(selectedBlock > 0 && this->_tsBlockDuration->at(selectedBlock) < fabs(offsetFromCurrent))
+                {
+                    offsetFromCurrent += this->_tsBlockDuration->at(selectedBlock);
+                    selectedBlock--;
+                }
+                offsetFromCurrent = (offsetFromCurrent < 0.0)? 0.0:offsetFromCurrent;
+            }
+            else
+            {
+                while(selectedBlock < (int64_t)this->_tsBlockDuration->size() - 1 && this->_tsBlockDuration->at(selectedBlock) < offsetFromCurrent)
+                {
+                    offsetFromCurrent -= this->_tsBlockDuration->at(selectedBlock);
+                    selectedBlock++;
+                }
+                selectedBlock = (selectedBlock > (int64_t)this->_tsBlockDuration->size() - 1)?(int64_t)this->_tsBlockDuration->size():selectedBlock;
+            }
+            int64_t posOffset = 0;
+            if(!this->_ioCtx->_videoSegments.at(selectedBlock)->getIsLoaded())
+                this->_ioCtx->_videoSegments.at(selectedBlock)->loadSegment();
+            if(this->_ioCtx->_videoSegments.at(selectedBlock)->getIsLoaded())
+            {
+                if(offsetFromCurrent < 0)
+                {
+                    posOffset = ((this->_tsBlockDuration->at(selectedBlock) + offsetFromCurrent) / this->_tsBlockDuration->at(selectedBlock))
+                        * this->_ioCtx->_videoSegments.at(selectedBlock)->loadedSize();
+                }
+                else
+                {
+                    posOffset = (offsetFromCurrent / this->_tsBlockDuration->at(selectedBlock))
+                        * this->_ioCtx->_videoSegments.at(selectedBlock)->loadedSize();
+                }
+            }
+            this->_ioCtx->_blockToSeek = selectedBlock;
+            this->_ioCtx->_ioCtx->seek(this->_ioCtx, posOffset, SEEK_SET);
+            avio_flush(this->_ioCtx->_ioCtx);
+            if(_audioCodec != nullptr)
+            {
+                avcodec_flush_buffers(_audioCodec);
+            }
+            else
+            {
+                std::cerr << "(TSVideo) Audio codec unassigned" << std::endl;
+            }
+            SDL_UnlockMutex(_videoPlayerMutex);
         }
         else if(whence == SEEK_SET)
         {
