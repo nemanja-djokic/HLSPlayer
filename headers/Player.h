@@ -24,6 +24,12 @@ class Player
 {
     private:
         Playlist* _playlist;
+        std::vector<Playlist*> _playlists;
+        std::vector<int32_t> _bitrates;
+        int32_t _desiredWidth;
+        int32_t _desiredHeight;
+        int32_t _desiredMaxMemory;
+        bool _desiredFullScreen;
         void loadSegments();
         bool pollEvent(SDL_Event, TSVideo*);
         std::vector<TSVideo*> _tsVideo;
@@ -51,7 +57,8 @@ class Player
         static const uint32_t ADAPTATION_ONLY_PAYLOAD;
         static const uint32_t ADAPTATION_BOTH;
         static const uint32_t SAMPLE_CORRECTION_PERCENT_MAX;
-        Player(Playlist*);
+        Player(Playlist*, int32_t, int32_t, int32_t, bool);
+        Player(std::vector<Playlist*>, std::vector<int32_t>, int32_t, int32_t, int32_t, bool);
         ~Player();
         bool playNext();
         friend void loadSegmentsThread(Player* player);

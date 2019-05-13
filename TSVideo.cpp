@@ -11,10 +11,9 @@ extern "C"
 #include <cstdlib>
 #include <iomanip>
 
-TSVideo::TSVideo(std::string fname)
+TSVideo::TSVideo()
 {
     this->_ioCtx = new CustomIOContext();
-    this->_fname = fname;
     this->_formatContext = nullptr;
     this->_videoCodec = nullptr;
     this->_audioCodec = nullptr;
@@ -85,10 +84,6 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
     {
         if(whence == SEEK_CUR)
         {
-            //Completely broken due to incorrect Extinf data
-            /*int64_t seekTimestamp = currentTimestamp + offset;
-            seekTimestamp = (seekTimestamp < 0)?0:(seekTimestamp > this->getFullDuration())?this->getFullDuration():seekTimestamp;
-            this->seek(seekTimestamp, SEEK_DATA, currentTimestamp);*/
             double currentBlockElapsed = this->_ioCtx->_pos * this->_tsBlockDuration->at(this->_ioCtx->_block) 
             / this->_ioCtx->_videoSegments.at(this->_ioCtx->_block)->loadedSize();
             double offsetFromCurrent = offset + currentBlockElapsed;
@@ -127,6 +122,8 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
                         * this->_ioCtx->_videoSegments.at(selectedBlock)->loadedSize();
                 }
             }
+            if(offsetFromCurrent > this->_tsBlockDuration->at(selectedBlock)/2 && selectedBlock < (int64_t)this->_tsBlockDuration->size() - 1)
+                selectedBlock++;
             this->_ioCtx->_blockToSeek = selectedBlock;
             this->_ioCtx->_ioCtx->seek(this->_ioCtx, posOffset, SEEK_SET);
             avio_flush(this->_ioCtx->_ioCtx);

@@ -25,12 +25,45 @@ const uint32_t Player::ADAPTATION_ONLY_PAYLOAD = 0b01;
 const uint32_t Player::ADAPTATION_BOTH = 0b11;
 const uint32_t Player::SAMPLE_CORRECTION_PERCENT_MAX = 35;
 
-Player::Player(Playlist* playlist)
+Player::Player(Playlist* playlist, int32_t width, int32_t height, int32_t maxMemory, bool fullScreen)
 {
     this->_playlist = playlist;
     this->_currentPosition = 0;
     this->_playerWindow = nullptr;
     this->_playerRenderer = nullptr;
+    this->_desiredWidth = width;
+    this->_desiredHeight = height;
+    this->_desiredMaxMemory = maxMemory;
+    this->_desiredFullScreen = fullScreen;
+    av_register_all();
+	avcodec_register_all();
+	avdevice_register_all();
+    avformat_network_init();
+    _paused = false;
+    _formatContext = nullptr;
+    _codec = nullptr;
+    _audioCodec = nullptr;
+    _swrCtx = nullptr;
+    _swsCtx = nullptr;
+    _videoStream = -1;
+    _audioStream = -1;
+    _pFrameYUV = av_frame_alloc();
+    TTF_Init();
+    loadSegments();
+    av_log_set_level(AV_LOG_PANIC);
+}
+
+Player::Player(std::vector<Playlist*> playlists, std::vector<int32_t> bitrates, int32_t width, int32_t height, int32_t maxMemory, bool fullScreen)
+{
+    this->_playlists = playlists;
+    this->_bitrates = bitrates;
+    this->_currentPosition = 0;
+    this->_playerWindow = nullptr;
+    this->_playerRenderer = nullptr;
+    this->_desiredWidth = width;
+    this->_desiredHeight = height;
+    this->_desiredMaxMemory = maxMemory;
+    this->_desiredFullScreen = fullScreen;
     av_register_all();
 	avcodec_register_all();
 	avdevice_register_all();
@@ -56,7 +89,7 @@ Player::~Player()
 
 void Player::loadSegments()
 {
-    TSVideo* toInsertVideo = new TSVideo((*_playlist->getSegments())[_playlist->getSegments()->size() - 1].getEndpoint());
+    TSVideo* toInsertVideo = new TSVideo();
     for(unsigned int i = 0; i < (*_playlist->getSegments()).size(); i++)
     {
         toInsertVideo->appendSegment(&_playlist->getSegments()->at(i));
@@ -211,19 +244,6 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
             audio_len = outBufferSize;
             audio_pos = audio_chunk;
             current->clearResetAudio();
-            current->clearSoftResetAudio();
-        }
-        else if(current->isSoftResetAudio())
-        {
-            audio_clear = true;
-            framesToSkip = current->getAudioQueueSize();
-            uint8_t* tempBuffer = (uint8_t*)av_mallocz(outBufferSize);
-            memcpy(tempBuffer, outBuffer, outBufferSize);
-            av_free(audio_chunk);
-            audio_chunk = (uint8_t*)tempBuffer;
-            audio_len = outBufferSize;
-            audio_pos = audio_chunk;
-            current->clearSoftResetAudio();
         }
         else
         {
@@ -465,6 +485,8 @@ bool Player::playNext()
     }
     SDL_DisplayMode displayMode;
     SDL_GetCurrentDisplayMode(0, &displayMode);
+    if(!this->_desiredFullScreen && this->_desiredWidth > 0)displayMode.w = this->_desiredWidth;
+    if(!this->_desiredFullScreen && this->_desiredHeight > 0)displayMode.h = this->_desiredHeight;
     current.assignVideoCodec(codecContext);
     current.assignAudioCodec(audioCodecContext);
     av_dump_format(_formatContext, 0, nullptr, 0);
@@ -477,7 +499,7 @@ bool Player::playNext()
             displayMode.w,
             displayMode.h,
             dst_fix_fmt,
-            SWS_BILINEAR,
+            SWS_BICUBIC,
             NULL,
             NULL,
             NULL);
@@ -498,6 +520,8 @@ bool Player::playNext()
     if(_playerWindow == nullptr)
     {
         SDL_GetCurrentDisplayMode(0, &displayMode);
+        if(!this->_desiredFullScreen && this->_desiredWidth > 0)displayMode.w = this->_desiredWidth;
+        if(!this->_desiredFullScreen && this->_desiredHeight > 0)displayMode.h = this->_desiredHeight;
         _playerWindow = SDL_CreateWindow("HLSPlayer",  
         SDL_WINDOWPOS_UNDEFINED,
         SDL_WINDOWPOS_UNDEFINED,
@@ -508,15 +532,15 @@ bool Player::playNext()
             std::cerr << "SDL: could not set video mode" << std::endl;
             return false;
         }
-        SDL_SetWindowFullscreen(_playerWindow, SDL_WINDOW_FULLSCREEN_DESKTOP);
+        if(this->_desiredFullScreen)SDL_SetWindowFullscreen(_playerWindow, SDL_WINDOW_FULLSCREEN_DESKTOP);
         _playerRenderer = SDL_CreateRenderer(_playerWindow, -1, SDL_RENDERER_TARGETTEXTURE);
 
         _playerTexture = SDL_CreateTexture(  
             _playerRenderer,
             SDL_PIXELFORMAT_BGR24,
             SDL_TEXTUREACCESS_STATIC,
-            displayMode.w,  
-            displayMode.h);  
+            displayMode.w,
+            displayMode.h);
 	    if(!_playerTexture)
 		    return false;
 	    SDL_SetTextureBlendMode(_playerTexture,SDL_BLENDMODE_BLEND);
@@ -555,11 +579,7 @@ bool Player::playNext()
     audioThreadRunning = false;
     swr_free(&_swrCtx);   
     avcodec_close(codecContext);
-    if(current.getFname() == _tsVideo.at(_tsVideo.size() - 1)->getFname())
-    {
-        SDL_CloseAudio();
-        std::cout << "COMPLETED" << std::endl;
-        return false;
-    }
-    return true;
+    SDL_CloseAudio();
+    std::cout << "COMPLETED" << std::endl;
+    return false;
 }

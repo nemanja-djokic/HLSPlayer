@@ -22,7 +22,6 @@ class TSVideo
     private:
         std::vector<uint8_t> _videoPayload;
         bool _hasData;
-        std::string _fname;
         bool _isSaved;
         int32_t _currentReferencePts;
         std::vector<int32_t>* _tsBlockBegin;
@@ -43,7 +42,7 @@ class TSVideo
         AVFormatContext* _formatContext;
         CustomIOContext* _ioCtx;
     public:
-        TSVideo(std::string);
+        TSVideo();
         ~TSVideo();
         friend class Player;
         uint32_t getFullDuration();
@@ -54,15 +53,12 @@ class TSVideo
         void appendSegment(PlaylistSegment*);
         inline bool getHasData(){return _hasData;};
         inline size_t getSize(){return _videoPayload.size();};
-        inline std::string getFname(){return _fname;};
         void prepareFormatContext();
         inline AVFormatContext* getFormatContext(){return _formatContext;};
         void seek(int64_t, int64_t, int64_t);
         inline int32_t getCurrentPlayingSegment(){return _ioCtx->_block;};
         inline bool isResetAudio(){return _ioCtx->isResetAudio();};
         inline void clearResetAudio(){_ioCtx->clearResetAudio();};
-        inline bool isSoftResetAudio(){return _ioCtx->_softResetAudio;};
-        inline void clearSoftResetAudio(){_ioCtx->_softResetAudio = false;};
         inline bool isBuffersSafe(){return _videoQueue->size() > 0 && _audioQueue->size() > 0;};
         inline SDL_mutex* getVideoPlayerMutex(){return _videoPlayerMutex;};
         inline CustomIOContext* getCustomIOContext(){return _ioCtx;};
