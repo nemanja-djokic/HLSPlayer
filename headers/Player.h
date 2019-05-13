@@ -24,8 +24,8 @@ class Player
 {
     private:
         Playlist* _playlist;
-        std::vector<Playlist*> _playlists;
-        std::vector<int32_t> _bitrates;
+        std::vector<Playlist*>* _playlists;
+        std::vector<int32_t>* _bitrates;
         int32_t _desiredWidth;
         int32_t _desiredHeight;
         int32_t _desiredMaxMemory;
@@ -58,7 +58,7 @@ class Player
         static const uint32_t ADAPTATION_BOTH;
         static const uint32_t SAMPLE_CORRECTION_PERCENT_MAX;
         Player(Playlist*, int32_t, int32_t, int32_t, bool);
-        Player(std::vector<Playlist*>, std::vector<int32_t>, int32_t, int32_t, int32_t, bool);
+        Player(std::vector<Playlist*>*, std::vector<int32_t>*, int32_t, int32_t, int32_t, bool);
         ~Player();
         bool playNext();
         friend void loadSegmentsThread(Player* player);

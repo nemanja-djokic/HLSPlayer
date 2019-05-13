@@ -3,12 +3,13 @@
 
 #include <vector>
 #include <string>
+#include <iostream>
 #include "PlaylistSegment.h"
 
 class Playlist
 {
     private:
-        std::vector<PlaylistSegment> _mediaEndpoints;
+        std::vector<PlaylistSegment*>* _mediaEndpoints;
         int _targetDuration;
         int _mediaSequence;
         bool _isEnded;
@@ -23,7 +24,7 @@ class Playlist
         //Returns data, duration is out param, filled with duration of the segment
         void* nextMediaBlock(double& duration);
         inline bool getIsEnded(){return _isEnded;};
-        inline std::vector<PlaylistSegment>* getSegments(){return &_mediaEndpoints;};
+        inline std::vector<PlaylistSegment*>* getSegments(){return _mediaEndpoints;};
 };
 
 #endif

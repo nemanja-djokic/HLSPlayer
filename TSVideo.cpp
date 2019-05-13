@@ -53,9 +53,9 @@ TSVideo::~TSVideo()
 uint32_t TSVideo::getFullDuration()
 {
     double total = 0.0;
-    for(size_t i = 0; i < _tsBlockDuration->size(); i++)
+    for(int32_t i = 0; i < this->_ioCtx->_networkManager->getSegmentsSize(); i++)
     {
-        total += _tsBlockDuration->at(i);
+        total += this->_ioCtx->_networkManager->getBlockDuration(i);
     }
     return (uint32_t)total;
 }
@@ -84,45 +84,45 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
     {
         if(whence == SEEK_CUR)
         {
-            double currentBlockElapsed = this->_ioCtx->_pos * this->_tsBlockDuration->at(this->_ioCtx->_block) 
-            / this->_ioCtx->_videoSegments.at(this->_ioCtx->_block)->loadedSize();
+            double currentBlockElapsed = this->_ioCtx->_pos * this->_ioCtx->_networkManager->getBlockDuration(this->_ioCtx->_block) 
+            / this->_ioCtx->_networkManager->getSegment(this->_ioCtx->_block)->loadedSize();
             double offsetFromCurrent = offset + currentBlockElapsed;
             int64_t selectedBlock = this->_ioCtx->_block;
             if(offsetFromCurrent < 0)
             {
-                while(selectedBlock > 0 && this->_tsBlockDuration->at(selectedBlock) < fabs(offsetFromCurrent))
+                while(selectedBlock > 0 && this->_ioCtx->_networkManager->getBlockDuration(selectedBlock) < fabs(offsetFromCurrent))
                 {
-                    offsetFromCurrent += this->_tsBlockDuration->at(selectedBlock);
+                    offsetFromCurrent += this->_ioCtx->_networkManager->getBlockDuration(selectedBlock);
                     selectedBlock--;
                 }
                 offsetFromCurrent = (offsetFromCurrent < 0.0)? 0.0:offsetFromCurrent;
             }
             else
             {
-                while(selectedBlock < (int64_t)this->_tsBlockDuration->size() - 1 && this->_tsBlockDuration->at(selectedBlock) < offsetFromCurrent)
+                while(selectedBlock < (int64_t)this->_ioCtx->_networkManager->getSegmentsSize() - 1 && this->_ioCtx->_networkManager->getBlockDuration(selectedBlock) < offsetFromCurrent)
                 {
-                    offsetFromCurrent -= this->_tsBlockDuration->at(selectedBlock);
+                    offsetFromCurrent -= this->_ioCtx->_networkManager->getBlockDuration(selectedBlock);
                     selectedBlock++;
                 }
-                selectedBlock = (selectedBlock > (int64_t)this->_tsBlockDuration->size() - 1)?(int64_t)this->_tsBlockDuration->size():selectedBlock;
+                selectedBlock = (selectedBlock > (int64_t)this->_ioCtx->_networkManager->getSegmentsSize() - 1)?(int64_t)this->_ioCtx->_networkManager->getSegmentsSize():selectedBlock;
             }
             int64_t posOffset = 0;
-            if(!this->_ioCtx->_videoSegments.at(selectedBlock)->getIsLoaded())
-                this->_ioCtx->_videoSegments.at(selectedBlock)->loadSegment();
-            if(this->_ioCtx->_videoSegments.at(selectedBlock)->getIsLoaded())
+            if(!this->_ioCtx->_networkManager->getSegment(selectedBlock)->getIsLoaded())
+                this->_ioCtx->_networkManager->getSegment(selectedBlock)->loadSegment();
+            if(this->_ioCtx->_networkManager->getSegment(selectedBlock)->getIsLoaded())
             {
                 if(offsetFromCurrent < 0)
                 {
-                    posOffset = ((this->_tsBlockDuration->at(selectedBlock) + offsetFromCurrent) / this->_tsBlockDuration->at(selectedBlock))
-                        * this->_ioCtx->_videoSegments.at(selectedBlock)->loadedSize();
+                    posOffset = ((this->_ioCtx->_networkManager->getBlockDuration(selectedBlock) + offsetFromCurrent) / this->_ioCtx->_networkManager->getBlockDuration(selectedBlock))
+                        * this->_ioCtx->_networkManager->getSegment(selectedBlock)->loadedSize();
                 }
                 else
                 {
-                    posOffset = (offsetFromCurrent / this->_tsBlockDuration->at(selectedBlock))
-                        * this->_ioCtx->_videoSegments.at(selectedBlock)->loadedSize();
+                    posOffset = (offsetFromCurrent / this->_ioCtx->_networkManager->getBlockDuration(selectedBlock))
+                        * this->_ioCtx->_networkManager->getSegment(selectedBlock)->loadedSize();
                 }
             }
-            if(offsetFromCurrent > this->_tsBlockDuration->at(selectedBlock)/2 && selectedBlock < (int64_t)this->_tsBlockDuration->size() - 1)
+            if(offsetFromCurrent > this->_ioCtx->_networkManager->getBlockDuration(selectedBlock)/2 && selectedBlock < (int64_t)this->_ioCtx->_networkManager->getSegmentsSize() - 1)
                 selectedBlock++;
             this->_ioCtx->_blockToSeek = selectedBlock;
             this->_ioCtx->_ioCtx->seek(this->_ioCtx, posOffset, SEEK_SET);
@@ -147,22 +147,22 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
             SDL_LockMutex(_videoPlayerMutex);
             double pos = (double)offset;
             int64_t selectedBlock = -1;
-            for(size_t i = 0; i < this->_tsBlockDuration->size(); i++)
+            for(int32_t i = 0; i < this->_ioCtx->_networkManager->getSegmentsSize(); i++)
             {
-                if(pos < this->_tsBlockDuration->at(i))
+                if(pos < this->_ioCtx->_networkManager->getBlockDuration(i))
                 {
                     selectedBlock = i;
                     break;
                 }
-                pos -= this->_tsBlockDuration->at(i);
+                pos -= this->_ioCtx->_networkManager->getBlockDuration(i);
             }
             if(selectedBlock == -1)
                 return;
-            if(!this->_ioCtx->_videoSegments.at(selectedBlock)->getIsLoaded())
-                this->_ioCtx->_videoSegments.at(selectedBlock)->loadSegment();
+            if(!this->_ioCtx->_networkManager->getSegment(selectedBlock)->getIsLoaded())
+                this->_ioCtx->_networkManager->getSegment(selectedBlock)->loadSegment();
             this->_ioCtx->_blockToSeek = selectedBlock;
-            int64_t seekPos = (pos * 1000) / this->_tsBlockDuration->at(selectedBlock);
-            seekPos *= this->_ioCtx->_videoSegments.at(selectedBlock)->loadedSize();
+            int64_t seekPos = (pos * 1000) / this->_ioCtx->_networkManager->getBlockDuration(selectedBlock);
+            seekPos *= this->_ioCtx->_networkManager->getSegment(selectedBlock)->loadedSize();
             seekPos /= 1000;
             this->_ioCtx->_ioCtx->seek(this->_ioCtx, seekPos, SEEK_SET);
             avio_flush(this->_ioCtx->_ioCtx);
@@ -185,8 +185,8 @@ uint32_t TSVideo::getSeconds()
     double cumulative = 0.0;
     double lastAdded = 0.0;
     while(pos < (int64_t)this->_tsBlockBegin->size() - 1 && this->_tsBlockBegin->at(++pos) < this->_ioCtx->_pos){
-        cumulative += this->_tsBlockDuration->at(pos);
-        lastAdded = this->_tsBlockDuration->at(pos);
+        cumulative += this->_ioCtx->_networkManager->getBlockDuration(pos);
+        lastAdded = this->_ioCtx->_networkManager->getBlockDuration(pos);
     }
     cumulative -= lastAdded;
     pos--;
@@ -195,12 +195,6 @@ uint32_t TSVideo::getSeconds()
        return 0;
     }
     double currentBlockElapsed = ((double)(this->_ioCtx->_pos - this->_tsBlockBegin->at(pos)) / (double)this->_tsBlockSize->at(pos))
-    *this->_tsBlockDuration->at(pos);
+    *this->_ioCtx->_networkManager->getBlockDuration(pos);
     return (uint32_t)(cumulative + currentBlockElapsed);
-}
-
-void TSVideo::appendSegment(PlaylistSegment* segment)
-{
-    _ioCtx->appendSegment(segment);
-    this->_tsBlockDuration->insert(this->_tsBlockDuration->end(), segment->getExtInf());
 }

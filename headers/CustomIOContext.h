@@ -30,7 +30,6 @@ private:
     AVIOContext* _ioCtx;
 	uint8_t* _buffer;
 	int _bufferSize;
-    std::vector<PlaylistSegment*> _videoSegments;
     int32_t _block;
     int32_t _pos;
     int32_t _blockToSeek;
@@ -38,8 +37,6 @@ public:
     inline bool isResetAudio(){return _resetAudio;};
     inline void setResetAudio(){_resetAudio = true;};
     inline void clearResetAudio(){_resetAudio = false;};
-
-    void appendSegment(PlaylistSegment*);
 
     friend int IOReadFunc(void *data, uint8_t *buf, int buf_size);
     friend int64_t IOSeekFunc(void *data, int64_t offset, int whence);

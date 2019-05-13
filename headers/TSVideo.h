@@ -50,7 +50,6 @@ class TSVideo
         inline void setLastTimestamp(uint32_t timestamp){_lastTimestamp = timestamp;};
         inline bool isSaved(){return _isSaved;};
         inline TTF_Font* getFont(){return font;};
-        void appendSegment(PlaylistSegment*);
         inline bool getHasData(){return _hasData;};
         inline size_t getSize(){return _videoPayload.size();};
         void prepareFormatContext();

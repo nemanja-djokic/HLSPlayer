@@ -16,6 +16,7 @@ Playlist* Playlist::parsePlaylist(std::string content, std::string baseUrl)
     int lineCount = 0;
     Playlist* toReturn = new Playlist();
     toReturn->_isEnded = false;
+    toReturn->_mediaEndpoints = new std::vector<PlaylistSegment*>();
     int segmentCounter = 0;
     for(std::string line; std::getline(iss, line, '\n'); lineCount++)
     {
@@ -63,7 +64,7 @@ Playlist* Playlist::parsePlaylist(std::string content, std::string baseUrl)
                     std::getline(iss, nextLine, '\n');
                     if(nextLine.c_str()[nextLine.length() - 1] == '\r')
                         nextLine = nextLine.substr(0, nextLine.length() - 1); //HAX
-                    toReturn->_mediaEndpoints.insert(toReturn->_mediaEndpoints.end(), PlaylistSegment(segmentCounter++, line, nextLine, baseUrl));
+                    toReturn->_mediaEndpoints->insert(toReturn->_mediaEndpoints->end(), new PlaylistSegment(segmentCounter++, line, nextLine, baseUrl));
                 }
             }
             catch(const std::exception& e)

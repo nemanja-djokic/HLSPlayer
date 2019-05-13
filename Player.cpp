@@ -53,7 +53,7 @@ Player::Player(Playlist* playlist, int32_t width, int32_t height, int32_t maxMem
     av_log_set_level(AV_LOG_PANIC);
 }
 
-Player::Player(std::vector<Playlist*> playlists, std::vector<int32_t> bitrates, int32_t width, int32_t height, int32_t maxMemory, bool fullScreen)
+Player::Player(std::vector<Playlist*>* playlists, std::vector<int32_t>* bitrates, int32_t width, int32_t height, int32_t maxMemory, bool fullScreen)
 {
     this->_playlists = playlists;
     this->_bitrates = bitrates;
@@ -90,13 +90,9 @@ Player::~Player()
 void Player::loadSegments()
 {
     TSVideo* toInsertVideo = new TSVideo();
-    for(unsigned int i = 0; i < (*_playlist->getSegments()).size(); i++)
-    {
-        toInsertVideo->appendSegment(&_playlist->getSegments()->at(i));
-    }
     this->_tsVideo.push_back(toInsertVideo);
+	toInsertVideo->_ioCtx->_networkManager = new NetworkManager(_playlists, _bitrates, _desiredMaxMemory, 10, 3);
     toInsertVideo->prepareFormatContext();
-	toInsertVideo->_ioCtx->_networkManager = new NetworkManager(&toInsertVideo->_ioCtx->_videoSegments, 10, 3);
 	toInsertVideo->_ioCtx->_networkManager->start();
 }
 
@@ -392,7 +388,6 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
 
 bool Player::playNext()
 {
-    while(!(*this->_playlist->getSegments())[_currentPosition].getIsLoaded());
     while(_currentPosition >= this->_tsVideo.size());
     TSVideo current = *this->_tsVideo[_currentPosition];
     _currentPosition++;
@@ -508,8 +503,7 @@ bool Player::playNext()
             dst_fix_fmt,  
             displayMode.w,  
             displayMode.h);  
-        uint8_t* buffer = (uint8_t *)av_malloc(numBytes*sizeof(uint8_t));  
-  
+        uint8_t* buffer = (uint8_t *)av_malloc(numBytes*sizeof(uint8_t));
         avpicture_fill((AVPicture *)_pFrameYUV, buffer, dst_fix_fmt,  
             displayMode.w, displayMode.h);
         _sdlRect.x = 0;  

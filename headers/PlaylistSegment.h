@@ -56,7 +56,7 @@ class PlaylistSegment
 
         inline std::string getEndpoint(){return _endpoint;};
 
-        void loadSegment();
+        int32_t loadSegment();
         void unloadSegment();
 
         friend std::ostream& operator<<(std::ostream&, const PlaylistSegment&);

@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
         std::cout << "[HLS Stream Link (Required)] [Optional attributes]" << std::endl;
         std::cout << "Optional attributes:" << std::endl;
         std::cout << "-m [value]" << std::endl;
-        std::cout << "      Sets the maximum capacity of the internal buffer to the value. Value entered is in MB. Default is 100MB." << std::endl;
+        std::cout << "      Sets the maximum capacity of the internal buffer to the value. Value entered is in MB. Default is 50MB." << std::endl;
         std::cout << "-w [value]" << std::endl;
         std::cout << "      Sets the pixel width of the player to the value. Default is current monitor width." << std::endl;
         std::cout << "-h [vrijednost]" << std::endl;
@@ -31,14 +31,14 @@ int main(int argc, char* argv[])
     HlsUtil util(argv[1]);
     int32_t width = -1;
     int32_t height = -1;
-    int32_t maxMemory = 100;
+    int32_t maxMemory = 50;
     bool fullScreen = true;
     for(int i = 2; i < argc; i++)
     {
         if(strcmp(argv[i], "-m") == 0)
         {
             maxMemory = std::atoi(argv[i + 1]);
-            if(maxMemory < 0)maxMemory = 100;
+            if(maxMemory < 0)maxMemory = 50;
         }
         else if(strcmp(argv[i], "-w") == 0)
             width = std::atoi(argv[i + 1]);
@@ -56,21 +56,22 @@ int main(int argc, char* argv[])
         std::cerr << "PARSE_FAILED" << std::endl;
     std::vector<int> bitrates = util.getAvailableBitrates();
     int maxBitrate = 0;
-    std::vector<Playlist*> playlistVector;
-    std::vector<int32_t> bitratesVector;
+    std::vector<Playlist*>* playlistVector = new std::vector<Playlist*>();
+    std::vector<int32_t>* bitratesVector = new std::vector<int32_t>();
     for(std::vector<int>::iterator it = bitrates.begin(); it != bitrates.end(); ++it)
     {
-        bitratesVector.insert(bitratesVector.end(), *it);
-        playlistVector.insert(playlistVector.end(), util.getPlaylistForBitrate(*it));
+        if(util.getPlaylistForBitrate(*it)->getSegments()->size() != 184)continue;
+        bitratesVector->insert(bitratesVector->end(), *it);
+        playlistVector->insert(playlistVector->end(), util.getPlaylistForBitrate(*it));
         maxBitrate = (maxBitrate < *it)?*it:maxBitrate;
         std::cout << *it << std::endl;
     }
     Playlist* playlist = util.getPlaylistForBitrate(maxBitrate);
     std::cout << playlist->getIsEnded() << std::endl;
-    std::vector<PlaylistSegment> segments = *playlist->getSegments();
+    std::vector<PlaylistSegment*> segments = *playlist->getSegments();
     std::cout << segments.size() << std::endl;
-    Player player(playlist, width, height, maxMemory, fullScreen);
-
+    //Player player(playlist, width, height, maxMemory, fullScreen);
+    Player player(playlistVector, bitratesVector, width, height, maxMemory, fullScreen);
     while(player.playNext());
     delete playlist;
     return 0;

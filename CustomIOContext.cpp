@@ -10,19 +10,20 @@ int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 	CustomIOContext *hctx = (CustomIOContext*)data;
 	if(hctx->_block == 0 && hctx->_pos == 0)
 	{
-		PlaylistSegment* currentSegment = hctx->_videoSegments.at(0);
+		PlaylistSegment* currentSegment = hctx->_networkManager->getSegment(0);
 		currentSegment->loadSegment();
 	}
-	if(hctx->_block >= (int32_t)hctx->_videoSegments.size() - 1)
+	if(hctx->_block >= (int32_t)hctx->_networkManager->getSegmentsSize() - 1)
 	{
 		return AVERROR_EOF;
 	}
 	SDL_LockMutex(hctx->_bufferMutex);
 	int64_t pos = hctx->_pos;
-	PlaylistSegment* currentSegment = hctx->_videoSegments.at(hctx->_block);
+	PlaylistSegment* currentSegment = hctx->_networkManager->getSegment(hctx->_block);
 	if(!currentSegment->getIsLoaded())
 	{
 		hctx->_networkManager->updateCurrentSegment(hctx->_block);
+		SDL_SemPost(hctx->_networkManager->getBlockEndSemaphore());
 		SDL_SemPost(hctx->_networkManager->getBlockEndSemaphore());
 		std::cerr << "Loading in read callback!" << std::endl;
 		currentSegment->loadSegment();
@@ -40,6 +41,7 @@ int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 		hctx->_pos = 0;
 		hctx->_block++;
 		hctx->_networkManager->updateCurrentSegment(hctx->_block);
+		SDL_SemPost(hctx->_networkManager->getBlockEndSemaphore());
 		SDL_SemPost(hctx->_networkManager->getBlockEndSemaphore());
 		SDL_UnlockMutex(hctx->_bufferMutex);
 		return currentSegment->loadedSize() - pos;
@@ -110,9 +112,4 @@ void CustomIOContext::initAVFormatContext(AVFormatContext *pCtx) {
 	probeData.buf_size = _bufferSize - 1;
 	probeData.filename = "";
 	pCtx->iformat = av_probe_input_format(&probeData, 1);
-}
-
-void CustomIOContext::appendSegment(PlaylistSegment* segment)
-{
-	_videoSegments.insert(_videoSegments.end(), segment);
 }
