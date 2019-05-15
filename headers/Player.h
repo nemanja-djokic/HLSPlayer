@@ -32,7 +32,7 @@ class Player
         bool _desiredFullScreen;
         void loadSegments();
         bool pollEvent(SDL_Event, TSVideo*);
-        std::vector<TSVideo*> _tsVideo;
+        TSVideo* _tsVideo;
         size_t _currentPosition;
         SDL_Window* _playerWindow;
         SDL_Renderer* _playerRenderer;

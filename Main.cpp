@@ -62,15 +62,17 @@ int main(int argc, char* argv[])
     {
         if(util.getPlaylistForBitrate(*it)->getSegments()->size() != 184)continue;
         bitratesVector->insert(bitratesVector->end(), *it);
-        playlistVector->insert(playlistVector->end(), util.getPlaylistForBitrate(*it));
+        Playlist* playlist = util.getPlaylistForBitrate(*it);
+        playlist->setBitrate(*it);
+        playlistVector->insert(playlistVector->end(), playlist);
         maxBitrate = (maxBitrate < *it)?*it:maxBitrate;
-        std::cout << *it << std::endl;
     }
+    std::sort(playlistVector->begin(), playlistVector->end(),
+          [](Playlist* i, Playlist* j)
+          {return i->getBitrate() < j->getBitrate();});
+    std::sort(bitratesVector->begin(), bitratesVector->end());
     Playlist* playlist = util.getPlaylistForBitrate(maxBitrate);
-    std::cout << playlist->getIsEnded() << std::endl;
     std::vector<PlaylistSegment*> segments = *playlist->getSegments();
-    std::cout << segments.size() << std::endl;
-    //Player player(playlist, width, height, maxMemory, fullScreen);
     Player player(playlistVector, bitratesVector, width, height, maxMemory, fullScreen);
     while(player.playNext());
     delete playlist;

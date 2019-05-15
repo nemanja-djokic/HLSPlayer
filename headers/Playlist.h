@@ -13,18 +13,19 @@ class Playlist
         int _targetDuration;
         int _mediaSequence;
         bool _isEnded;
+        int32_t _bitrate;
     public:
         static const std::string EXT_X_TARGETDURATION_TAG;
         static const std::string EXT_X_MEDIA_SEQUENCE_TAG;
         static const std::string EXT_X_ENDLIST_TAG;
         static const std::string EXTINF_TAG;
 
-        //Takes fully read content of the playlist endpoint
         static Playlist* parsePlaylist(std::string, std::string);
-        //Returns data, duration is out param, filled with duration of the segment
         void* nextMediaBlock(double& duration);
         inline bool getIsEnded(){return _isEnded;};
         inline std::vector<PlaylistSegment*>* getSegments(){return _mediaEndpoints;};
+        inline void setBitrate(int32_t bitrate){_bitrate = bitrate;};
+        inline int32_t getBitrate(){return _bitrate;};
 };
 
 #endif

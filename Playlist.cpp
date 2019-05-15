@@ -32,7 +32,6 @@ Playlist* Playlist::parsePlaylist(std::string content, std::string baseUrl)
                 std::cout << "lineCount 0" << std::endl;
             if(line.compare(MASTER_PLAYLIST_FIRST_LINE) != 0)
             {
-                std::cout << "comparing:" << std::endl;
                 std::cout << line << std::endl;
                 std::cout << MASTER_PLAYLIST_FIRST_LINE << std::endl;
             }

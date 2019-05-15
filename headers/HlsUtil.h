@@ -38,7 +38,10 @@ class HlsUtil
         {
             return ltrim(rtrim(s));
         }
-        inline std::vector<int> getAvailableBitrates(){return masterPlaylist->getAvailableBitrates();};
+        inline std::vector<int> getAvailableBitrates()
+        {
+            return masterPlaylist->getAvailableBitrates();
+        };
         Playlist* getPlaylistForBitrate(int bitrate);
 };
 

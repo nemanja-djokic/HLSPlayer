@@ -93,7 +93,7 @@ int32_t PlaylistSegment::loadSegment()
         loadFailed = true;
         curl_easy_cleanup(curl);
         SDL_UnlockMutex(_downloadMutex);
-        return -1;
+        return 0;
     }
     std::vector<uint8_t> tempBuffer;
     CURLcode res;
@@ -104,7 +104,7 @@ int32_t PlaylistSegment::loadSegment()
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, BinaryCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &tempBuffer);
-    uint32_t startTicks = SDL_GetTicks();
+    int32_t startTicks = SDL_GetTicks();
     res = curl_easy_perform(curl);
 
     if(res != CURLE_OK)
@@ -114,15 +114,15 @@ int32_t PlaylistSegment::loadSegment()
         loadFailed = true;
         curl_easy_cleanup(curl);
         SDL_UnlockMutex(_downloadMutex);
-        return -1;
+        return 0;
     }
     if(!loadFailed)
     {
-        uint32_t endTicks = SDL_GetTicks();
-        uint32_t miliseconds = endTicks - startTicks;
+        int32_t endTicks = SDL_GetTicks();
+        int32_t miliseconds = endTicks - startTicks;
         this->_tsData = new uint8_t[tempBuffer.size()];
-        uint32_t bitPerMs = tempBuffer.size() * 8 / miliseconds;
-        int32_t bitrate = (bitPerMs * 1000) / 1024;
+        int32_t bitPerMs = tempBuffer.size() * 8 / miliseconds;
+        int32_t bitrate = bitPerMs * 1000;
         this->_tsDataSize = tempBuffer.size();
         std::copy(tempBuffer.begin(), tempBuffer.end(), this->_tsData);
         this->_isLoaded = true;

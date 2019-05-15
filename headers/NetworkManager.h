@@ -20,6 +20,10 @@ private:
     int32_t _priorityDecayGainRate;
     int32_t _referenceBitrate;
     int32_t _maxMemory;
+    int32_t _lastBitrate;
+    bool _automaticAdaptiveBitrate;
+    int32_t _manualSelectedBitrateIndex;
+    bool _bitrateDiscontinuity;
     std::vector<int32_t> _videoSegmentWeights;
     std::vector<Playlist*>* _playlists;
     std::vector<int32_t>* _bitrates;
@@ -32,6 +36,11 @@ public:
     void updateCurrentSegment(int32_t);
     double getBlockDuration(int32_t);
     PlaylistSegment* getSegment(int32_t);
+    void setManualBitrate(int32_t);
+    void setAutomaticBitrate();
+    inline int32_t isBitrateDiscontinuity(){return _bitrateDiscontinuity;};
+    inline void clearBitrateDiscontinuity(){_bitrateDiscontinuity = false;};
+    inline int32_t getLastBitrate(){return _lastBitrate;};
     inline int32_t getSegmentsSize(){return _playlists->at(0)->getSegments()->size();};
     SDL_semaphore* getBlockEndSemaphore();
     friend void networkManagerThread(NetworkManager*);

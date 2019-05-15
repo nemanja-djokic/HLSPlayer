@@ -20,6 +20,10 @@ int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 	SDL_LockMutex(hctx->_bufferMutex);
 	int64_t pos = hctx->_pos;
 	PlaylistSegment* currentSegment = hctx->_networkManager->getSegment(hctx->_block);
+	if(currentSegment == nullptr)
+	{
+		return 0;
+	}
 	if(!currentSegment->getIsLoaded())
 	{
 		hctx->_networkManager->updateCurrentSegment(hctx->_block);
@@ -30,6 +34,22 @@ int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 	}
 	if(pos + buf_size <= (int)currentSegment->loadedSize())
 	{
+		if(hctx->_pos == 0 && hctx->_networkManager->isBitrateDiscontinuity())
+		{
+			std::cout << "Discontinuity reset" << std::endl;
+			hctx->_resetAudio = true;
+			avio_flush(hctx->_ioCtx);
+			avformat_flush(hctx->_formatContext);
+			if(hctx->_videoCodec != nullptr)
+        	{
+            	avcodec_flush_buffers(hctx->_videoCodec);
+        	}
+			if(hctx->_audioCodec != nullptr)
+        	{
+            	avcodec_flush_buffers(hctx->_audioCodec);
+        	}
+			hctx->_networkManager->clearBitrateDiscontinuity();
+		}
 		memcpy(buf, currentSegment->getTsData() + pos, buf_size);
 		hctx->_pos += buf_size;
 		SDL_UnlockMutex(hctx->_bufferMutex);
@@ -37,6 +57,22 @@ int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 	}
 	else
 	{
+		if(hctx->_pos == 0 && hctx->_networkManager->isBitrateDiscontinuity())
+		{
+			std::cout << "Discontinuity reset" << std::endl;
+			hctx->_resetAudio = true;
+			avio_flush(hctx->_ioCtx);
+			avformat_flush(hctx->_formatContext);
+			if(hctx->_videoCodec != nullptr)
+        	{
+            	avcodec_flush_buffers(hctx->_videoCodec);
+        	}
+			if(hctx->_audioCodec != nullptr)
+        	{
+            	avcodec_flush_buffers(hctx->_audioCodec);
+        	}
+			hctx->_networkManager->clearBitrateDiscontinuity();
+		}
 		memcpy(buf, currentSegment->getTsData() + pos, currentSegment->loadedSize() - pos);
 		hctx->_pos = 0;
 		hctx->_block++;

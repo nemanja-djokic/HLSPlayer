@@ -89,11 +89,10 @@ Player::~Player()
 
 void Player::loadSegments()
 {
-    TSVideo* toInsertVideo = new TSVideo();
-    this->_tsVideo.push_back(toInsertVideo);
-	toInsertVideo->_ioCtx->_networkManager = new NetworkManager(_playlists, _bitrates, _desiredMaxMemory, 10, 3);
-    toInsertVideo->prepareFormatContext();
-	toInsertVideo->_ioCtx->_networkManager->start();
+    this->_tsVideo = new TSVideo();
+	this->_tsVideo->_ioCtx->_networkManager = new NetworkManager(_playlists, _bitrates, _desiredMaxMemory, 10, 1);
+    this->_tsVideo->prepareFormatContext();
+	this->_tsVideo->_ioCtx->_networkManager->start();
 }
 
 static int32_t volumeRate = 10;
@@ -187,6 +186,12 @@ bool Player::pollEvent(SDL_Event event, TSVideo* actual)
                     volumeRate = (volumeRate < 10)?volumeRate + 1 : volumeRate;
                 else if(event.key.keysym.scancode == SDL_SCANCODE_KP_MINUS)
                     volumeRate = (volumeRate > 0)?volumeRate - 1 : volumeRate;
+                else if(event.key.keysym.scancode == SDL_SCANCODE_UP)
+                    this->_tsVideo->setManualBitrate(1);
+                else if(event.key.keysym.scancode == SDL_SCANCODE_DOWN)
+                    this->_tsVideo->setManualBitrate(-1);
+                else if(event.key.keysym.scancode == SDL_SCANCODE_A)
+                    this->_tsVideo->setAutomaticBitrate();
             }
         default:  
             break;  
@@ -210,6 +215,8 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
         AVFrame* _pFrame = av_frame_alloc();
         AVPacket* packet = current->dequeueAudio();
         if(packet == nullptr)
+            continue;
+        if(_pFrame == nullptr)
             continue;
         if(!audioThreadRunning)
         {
@@ -315,7 +322,17 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
             messageRect.y = windowHeight - textHeight;
             messageRect.w = textWidth;
             messageRect.h = textHeight;
-
+            _swsCtx = sws_getContext(
+                codecContext->width,
+                codecContext->height,
+                codecContext->pix_fmt,
+                windowWidth,
+                windowHeight,
+                AV_PIX_FMT_BGR24,
+                SWS_BICUBIC,
+                NULL,
+                NULL,
+                NULL);
 
             sws_scale(  
             _swsCtx,  
@@ -388,10 +405,9 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
 
 bool Player::playNext()
 {
-    while(_currentPosition >= this->_tsVideo.size());
-    TSVideo current = *this->_tsVideo[_currentPosition];
+    TSVideo* current = this->_tsVideo;
     _currentPosition++;
-    _formatContext = current.getFormatContext();
+    _formatContext = current->getFormatContext();
 
 
     _formatContext->probesize = 32;
@@ -451,7 +467,7 @@ bool Player::playNext()
         wantedSpec.silence = 0;
         wantedSpec.samples = 512;
         wantedSpec.callback = fill_audio;
-        wantedSpec.userdata = current.getCustomIOContext();
+        wantedSpec.userdata = current->getCustomIOContext();
         if(SDL_OpenAudio(&wantedSpec, &audioSpec) < 0)
         {
             std::cerr << "SDL_OpenAudio " << SDL_GetError() << std::endl;
@@ -474,7 +490,8 @@ bool Player::playNext()
         return false; 
     }
 	AVPixelFormat dst_fix_fmt = AV_PIX_FMT_BGR24;
-    if(_pFrameYUV == nullptr) {
+    if(_pFrameYUV == nullptr)
+    {
         std::cerr << "Bad frame format" << std::endl;
         return false;  
     }
@@ -482,8 +499,8 @@ bool Player::playNext()
     SDL_GetCurrentDisplayMode(0, &displayMode);
     if(!this->_desiredFullScreen && this->_desiredWidth > 0)displayMode.w = this->_desiredWidth;
     if(!this->_desiredFullScreen && this->_desiredHeight > 0)displayMode.h = this->_desiredHeight;
-    current.assignVideoCodec(codecContext);
-    current.assignAudioCodec(audioCodecContext);
+    current->assignVideoCodec(codecContext);
+    current->assignAudioCodec(audioCodecContext);
     av_dump_format(_formatContext, 0, nullptr, 0);
     if(_swsCtx == nullptr)
     {
@@ -542,32 +559,35 @@ bool Player::playNext()
     AVPacket packet;  
     SDL_Event event;
     int gotPicture = 0;
-    std::thread audioThread = std::thread(audioThreadFunction, audioCodecContext, &gotPicture, &current, _swrCtx);
+    std::thread audioThread = std::thread(audioThreadFunction, audioCodecContext, &gotPicture, current, _swrCtx);
     audioThread.detach();
     bool enqueuedFirstAudio = false;
     while(av_read_frame(_formatContext, &packet) >= 0)
     {
         while(_paused)
         {
-            if(!pollEvent(event, &current))
+            if(!pollEvent(event, current))
                 return false;
         }
-        if(current.isResetAudio())waitingForKeyFrame = true;
-        SDL_LockMutex(current.getVideoPlayerMutex());
+        if(current->isResetAudio())
+        {
+            waitingForKeyFrame = true;
+        }
+        SDL_LockMutex(current->getVideoPlayerMutex());
         if(packet.stream_index == _videoStream)
         {
-            current.enqueueVideo(packet);
-            if(enqueuedFirstAudio)videoThreadFunction(codecContext, _swsCtx, _pFrameYUV, _playerTexture, &_sdlRect, _playerRenderer, &current,
+            current->enqueueVideo(packet);
+            if(enqueuedFirstAudio)videoThreadFunction(codecContext, _swsCtx, _pFrameYUV, _playerTexture, &_sdlRect, _playerRenderer, current,
                 displayMode.w, displayMode.h, displayMode.w / 10, displayMode.h / 10);
         }
         else if(packet.stream_index == _audioStream)
         {
-            current.enqueueAudio(packet);
+            current->enqueueAudio(packet);
             SDL_SemPost(audioSemaphore);
             enqueuedFirstAudio = true;
         }
-        SDL_UnlockMutex(current.getVideoPlayerMutex());
-        if(!pollEvent(event, &current))
+        SDL_UnlockMutex(current->getVideoPlayerMutex());
+        if(!pollEvent(event, current))
             return false;
     }
     audioThreadRunning = false;

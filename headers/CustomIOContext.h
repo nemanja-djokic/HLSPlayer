@@ -33,6 +33,9 @@ private:
     int32_t _block;
     int32_t _pos;
     int32_t _blockToSeek;
+    AVCodecContext* _videoCodec;
+    AVCodecContext* _audioCodec;
+    AVFormatContext* _formatContext;
 public:
     inline bool isResetAudio(){return _resetAudio;};
     inline void setResetAudio(){_resetAudio = true;};

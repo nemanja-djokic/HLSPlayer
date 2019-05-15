@@ -76,6 +76,7 @@ void TSVideo::prepareFormatContext()
         std::cerr << "Stream info failed" << std::endl;
         _formatContext = nullptr;
     }
+    _ioCtx->_formatContext = _formatContext;
 }
 
 void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
@@ -197,4 +198,14 @@ uint32_t TSVideo::getSeconds()
     double currentBlockElapsed = ((double)(this->_ioCtx->_pos - this->_tsBlockBegin->at(pos)) / (double)this->_tsBlockSize->at(pos))
     *this->_ioCtx->_networkManager->getBlockDuration(pos);
     return (uint32_t)(cumulative + currentBlockElapsed);
+}
+
+void TSVideo::setAutomaticBitrate()
+{
+    this->_ioCtx->_networkManager->setAutomaticBitrate();
+}
+
+void TSVideo::setManualBitrate(int32_t whence)
+{
+    this->_ioCtx->_networkManager->setManualBitrate(whence);
 }

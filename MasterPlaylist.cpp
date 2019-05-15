@@ -69,7 +69,6 @@ std::vector<int> MasterPlaylist::getAvailableBitrates()
     std::vector<int> toReturn;
     for(std::vector<ExtXStreamInf>::iterator it = _extXStreamInf.begin(); it != _extXStreamInf.end(); ++it)
     {
-        std::cout << *it << std::endl;
         toReturn.insert(toReturn.begin(), (int)std::stoi(it->getBandwidth()));
     }
     return toReturn;
@@ -153,9 +152,6 @@ Playlist* MasterPlaylist::getPlaylistForBitrate(int bitrate)
                     endpointToPass += it->getEndpoint().substr(0, slashPos + 1);
                 }
             }
-            std::cout << "rootPlaylistUrl:" << _rootPlaylistUrl << std::endl;
-            std::cout << "itEndpoint:" << it->getEndpoint() << std::endl;
-            std::cout << "endpointToPass:" << endpointToPass << std::endl;
             return Playlist::parsePlaylist(getPlaylistContent(
                 ((it->getEndpoint().rfind("http", 0) == 0)?(it->getEndpoint()):(this->_rootPlaylistUrl + it->getEndpoint()))),
                 endpointToPass
