@@ -4,7 +4,7 @@ CFLAGS = -g3 -Wall -Werror -Wno-deprecated-declarations
 
 INCLUDE = 
 LIBS = -lSDL2main -lSDL2 -lcurl -lavdevice -lavformat -lavfilter -lavcodec -lswscale -lavutil -lpthread -lz -lswresample -lSDL2_ttf
-LIBDIR = 
+LIBDIR = -L/usr/local/lib/
 
 SRC = $(wildcard *.cpp)
 

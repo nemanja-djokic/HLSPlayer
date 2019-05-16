@@ -47,6 +47,7 @@ Player::Player(Playlist* playlist, int32_t width, int32_t height, int32_t maxMem
     _swsCtx = nullptr;
     _videoStream = -1;
     _audioStream = -1;
+    _lastPoll = 0;
     _pFrameYUV = av_frame_alloc();
     TTF_Init();
     loadSegments();
@@ -120,8 +121,6 @@ void  fill_audio(void* udata, uint8_t *stream, int len)
     SDL_UnlockMutex(audioMutex);
 }
 
-uint32_t lastPoll = 0;
-
 bool Player::pollEvent(SDL_Event event, TSVideo* actual)
 {
     SDL_PollEvent(&event);
@@ -132,18 +131,16 @@ bool Player::pollEvent(SDL_Event event, TSVideo* actual)
             return false;
         case SDL_KEYDOWN:
             {
-                if(lastPoll != 0)
+                uint32_t currentTicks = SDL_GetTicks();
+                if(!this->_tsVideo->_acceptsInterrupts || (currentTicks - _tsVideo->_lastPoll < 1000 && _tsVideo->_lastPoll != 0))
                 {
-                    uint32_t currentPoll = SDL_GetTicks();
-                    if(currentPoll - lastPoll < 500)
-                    {
-                        return true;
-                    }
-                    else
-                    {
-                        lastPoll = currentPoll;
-                    }
-                    
+                    std::cout << "Rejected" << std::endl;
+                    return true;
+                }
+                else
+                {
+                    this->_lastPoll = SDL_GetTicks();
+                    std::cout << "Accepted" << std::endl;
                 }
                 if(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
                 {
@@ -196,6 +193,8 @@ bool Player::pollEvent(SDL_Event event, TSVideo* actual)
         default:  
             break;  
     }
+    SDL_FlushEvent(SDL_KEYDOWN);
+    SDL_FlushEvent(SDL_KEYUP);
     return true;
 }
 
@@ -215,21 +214,26 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
         AVFrame* _pFrame = av_frame_alloc();
         AVPacket* packet = current->dequeueAudio();
         if(packet == nullptr)
+        {
+            av_frame_free(&_pFrame);
             continue;
+        }
         if(_pFrame == nullptr)
             continue;
         if(!audioThreadRunning)
         {
             std::cout << "audio ended early" << std::endl;
+            av_frame_free(&_pFrame);
             return;
         }
         int ret = avcodec_decode_audio4(audioCodecContext, _pFrame, gotPicture, packet);
         if(ret < 0)
         {
+            av_frame_free(&_pFrame);
             continue;
         }
         int outBufferSize = av_samples_get_buffer_size(NULL, audioCodecContext->channels, audioCodecContext->frame_size, AV_SAMPLE_FMT_S16, 1);
-        uint8_t* outBuffer = (uint8_t *)av_mallocz(outBufferSize * audioCodecContext->channels);
+        uint8_t* outBuffer = (uint8_t *)av_mallocz(outBufferSize * audioCodecContext->channels * 3 / 2);
         if(gotPicture > 0)
         {
             swr_convert(_swrCtx, &outBuffer, outBufferSize, (const uint8_t **)_pFrame->data, _pFrame->nb_samples);
@@ -269,13 +273,14 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
         current->setReferencePts(_pFrame->pts);
         SDL_UnlockMutex(audioMutex);
         av_free(outBuffer);
+        av_frame_free(&_pFrame);
     }
 }
 
 bool waitingForKeyFrame = false;
 AVFrame* lastValidFrame = nullptr;
 
-void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFrame* _pFrameYUV,
+void videoFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFrame* _pFrameYUV,
     SDL_Texture* _playerTexture, SDL_Rect* _sdlRect, SDL_Renderer* _playerRenderer, TSVideo* current,
     int32_t windowWidth, int32_t windowHeight, int32_t textWidth, int32_t textHeight)
 {
@@ -294,6 +299,23 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
             if(waitingForKeyFrame && _pFrame->key_frame == 1)
             {
                 waitingForKeyFrame = false;
+            }
+            double windowAspectRatio = (double)windowWidth / (double)windowHeight;
+            double videoAspectRatio = (double)_pFrame->width / (double)_pFrame->height;
+            bool windowWider = windowAspectRatio > videoAspectRatio;
+            int32_t desiredVideoWidth = 0;
+            int32_t desiredVideoHeight = 0;
+            if(windowWider)
+            {
+                double heightWindowToVideoRatio = (double)windowHeight / (double)_pFrame->height;
+                desiredVideoHeight = windowHeight;
+                desiredVideoWidth = _pFrame->width * heightWindowToVideoRatio;
+            }
+            else
+            {
+                double widthWindowToVideoRatio = (double)windowWidth / (double)_pFrame->width;
+                desiredVideoWidth = windowWidth;
+                desiredVideoHeight = _pFrame->height * widthWindowToVideoRatio;
             }
             uint32_t seconds = _pFrame->pts / 100000;
             std::stringstream timestampString;
@@ -326,8 +348,8 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
                 codecContext->width,
                 codecContext->height,
                 codecContext->pix_fmt,
-                windowWidth,
-                windowHeight,
+                desiredVideoWidth,
+                desiredVideoHeight,
                 AV_PIX_FMT_BGR24,
                 SWS_BICUBIC,
                 NULL,
@@ -343,6 +365,20 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
             _pFrameYUV->data,
             _pFrameYUV->linesize
             );
+            if(windowWider)
+            {
+                _sdlRect->x = (windowWidth - desiredVideoWidth) / 2;
+                _sdlRect->y = 0;
+                _sdlRect->w = desiredVideoWidth;
+                _sdlRect->h = desiredVideoHeight;
+            }
+            else
+            {
+                _sdlRect->x = 0;
+                _sdlRect->y = (windowHeight - desiredVideoHeight) / 2;
+                _sdlRect->w = desiredVideoWidth;
+                _sdlRect->h = desiredVideoHeight;
+            }
             if(_pFrame->key_frame == 1)lastValidFrame = _pFrameYUV;
             SDL_UpdateTexture(_playerTexture, _sdlRect, _pFrameYUV->data[0], _pFrameYUV->linesize[0]);
             SDL_RenderClear(_playerRenderer);
@@ -393,11 +429,13 @@ void videoThreadFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFr
 
         }
         int32_t endTicks = SDL_GetTicks();
+        int32_t maxDelay = (1000.0 / av_q2d(codecContext->framerate));
         int32_t delay = (1000.0 / av_q2d(codecContext->framerate)) - (endTicks - startTicks);
         delay = (delay < 0)?0:delay;
         int32_t avDesync = (current->getReferencePts() - _pFrame->pts) / 9000;
         if(avDesync > 1)delay += avDesync - 1;
         delay = (delay < 0)?0:delay;
+        if(delay > maxDelay)delay = maxDelay;
         SDL_Delay(delay);
     }
     av_free(_pFrame);
@@ -465,7 +503,7 @@ bool Player::playNext()
         wantedSpec.format = AUDIO_S16;
         wantedSpec.channels = audioCodecContext->channels;
         wantedSpec.silence = 0;
-        wantedSpec.samples = 512;
+        wantedSpec.samples = 256;
         wantedSpec.callback = fill_audio;
         wantedSpec.userdata = current->getCustomIOContext();
         if(SDL_OpenAudio(&wantedSpec, &audioSpec) < 0)
@@ -523,8 +561,8 @@ bool Player::playNext()
         uint8_t* buffer = (uint8_t *)av_malloc(numBytes*sizeof(uint8_t));
         avpicture_fill((AVPicture *)_pFrameYUV, buffer, dst_fix_fmt,  
             displayMode.w, displayMode.h);
-        _sdlRect.x = 0;  
-        _sdlRect.y = 0;  
+        _sdlRect.x = 0;
+        _sdlRect.y = 0;
         _sdlRect.w = displayMode.w;  
         _sdlRect.h = displayMode.h;
     }
@@ -577,8 +615,20 @@ bool Player::playNext()
         if(packet.stream_index == _videoStream)
         {
             current->enqueueVideo(packet);
-            if(enqueuedFirstAudio)videoThreadFunction(codecContext, _swsCtx, _pFrameYUV, _playerTexture, &_sdlRect, _playerRenderer, current,
-                displayMode.w, displayMode.h, displayMode.w / 10, displayMode.h / 10);
+            if(enqueuedFirstAudio)
+            {
+                if(this->_desiredFullScreen)
+                {
+                    videoFunction(codecContext, _swsCtx, _pFrameYUV, _playerTexture, &_sdlRect, _playerRenderer, current,
+                        displayMode.w, displayMode.h, displayMode.w / 10, displayMode.h / 10);
+                }
+                else
+                {
+                    videoFunction(codecContext, _swsCtx, _pFrameYUV, _playerTexture, &_sdlRect, _playerRenderer, current,
+                        this->_desiredWidth, this->_desiredHeight, this->_desiredWidth / 10, this->_desiredHeight / 10);
+                }
+                
+            }
         }
         else if(packet.stream_index == _audioStream)
         {

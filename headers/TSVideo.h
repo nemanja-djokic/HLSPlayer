@@ -23,6 +23,8 @@ class TSVideo
         std::vector<uint8_t> _videoPayload;
         bool _hasData;
         bool _isSaved;
+        bool _acceptsInterrupts;
+        uint32_t _lastPoll;
         int32_t _currentReferencePts;
         std::vector<int32_t>* _tsBlockBegin;
         std::vector<double>* _tsBlockDuration;

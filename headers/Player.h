@@ -44,6 +44,7 @@ class Player
         AVCodec* _codec;
         AVCodec* _audioCodec;
         bool _paused;
+        uint32_t _lastPoll;
         int64_t _inChLayout;
         SwrContext* _swrCtx;
         struct SwsContext* _swsCtx;

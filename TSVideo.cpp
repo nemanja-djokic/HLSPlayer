@@ -17,6 +17,8 @@ TSVideo::TSVideo()
     this->_formatContext = nullptr;
     this->_videoCodec = nullptr;
     this->_audioCodec = nullptr;
+    this->_acceptsInterrupts = true;
+    this->_lastPoll = 0;
     _lastTimestamp = -1;
     _videoQueue = new std::queue<AVPacket>();
     _audioQueue = new std::queue<AVPacket>();
@@ -81,6 +83,7 @@ void TSVideo::prepareFormatContext()
 
 void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
 {
+    this->_acceptsInterrupts = false;
     if(this->_ioCtx != nullptr)
     {
         if(whence == SEEK_CUR)
@@ -130,6 +133,7 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
             avio_flush(this->_ioCtx->_ioCtx);
             if(_audioCodec != nullptr)
             {
+                avformat_flush(this->_ioCtx->_formatContext);
                 avcodec_flush_buffers(_audioCodec);
             }
             else
@@ -158,7 +162,10 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
                 pos -= this->_ioCtx->_networkManager->getBlockDuration(i);
             }
             if(selectedBlock == -1)
+            {
+                this->_acceptsInterrupts = true;
                 return;
+            }
             if(!this->_ioCtx->_networkManager->getSegment(selectedBlock)->getIsLoaded())
                 this->_ioCtx->_networkManager->getSegment(selectedBlock)->loadSegment();
             this->_ioCtx->_blockToSeek = selectedBlock;
@@ -169,6 +176,7 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
             avio_flush(this->_ioCtx->_ioCtx);
             if(_audioCodec != nullptr)
             {
+                avformat_flush(this->_ioCtx->_formatContext);
                 avcodec_flush_buffers(_audioCodec);
             }
             else
@@ -178,6 +186,7 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
             SDL_UnlockMutex(_videoPlayerMutex);
         }
     }
+    this->_acceptsInterrupts = true;
 }
 
 uint32_t TSVideo::getSeconds()
