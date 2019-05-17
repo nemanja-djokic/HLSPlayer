@@ -55,7 +55,6 @@ int main(int argc, char* argv[])
     else if(res == PARSE_FAILED)
         std::cerr << "PARSE_FAILED" << std::endl;
     std::vector<int> bitrates = util.getAvailableBitrates();
-    int maxBitrate = 0;
     std::vector<Playlist*>* playlistVector = new std::vector<Playlist*>();
     std::vector<int32_t>* bitratesVector = new std::vector<int32_t>();
     for(std::vector<int>::iterator it = bitrates.begin(); it != bitrates.end(); ++it)
@@ -64,15 +63,33 @@ int main(int argc, char* argv[])
         Playlist* playlist = util.getPlaylistForBitrate(*it);
         playlist->setBitrate(*it);
         playlistVector->insert(playlistVector->end(), playlist);
-        maxBitrate = (maxBitrate < *it)?*it:maxBitrate;
     }
     std::sort(playlistVector->begin(), playlistVector->end(),
           [](Playlist* i, Playlist* j)
           {return i->getBitrate() < j->getBitrate();});
     std::sort(bitratesVector->begin(), bitratesVector->end());
-    Playlist* playlist = util.getPlaylistForBitrate(maxBitrate);
     Player player(playlistVector, bitratesVector, width, height, maxMemory, fullScreen);
+    int max = player.prepare();
+    playlistVector->clear();
+    bitratesVector->clear();
+    for(std::vector<int>::iterator it = bitrates.begin(); it != bitrates.end(); ++it)
+    {
+        Playlist* playlist = util.getPlaylistForBitrate(*it);
+        if((int32_t)playlist->getSegments()->size() != max)
+        {
+            continue;
+        }
+        playlist->setBitrate(*it);
+        bitratesVector->insert(bitratesVector->end(), *it);
+        playlistVector->insert(playlistVector->end(), playlist);
+    }
+    std::sort(playlistVector->begin(), playlistVector->end(),
+          [](Playlist* i, Playlist* j)
+          {return i->getBitrate() < j->getBitrate();});
+    std::sort(bitratesVector->begin(), bitratesVector->end());
+    player.setPlaylists(playlistVector);
+    player.setBitrates(bitratesVector);
+    player.loadSegments();
     while(player.playNext());
-    delete playlist;
     return 0;
 }

@@ -32,8 +32,8 @@ TSVideo::TSVideo()
     _audioQueueMutex = SDL_CreateMutex();
     _differenceCumulative = 0.0;
     _differenceCounter = 0;
-    font = TTF_OpenFont("/usr/share/fonts/truetype/Sarai/Sarai.ttf", 72);
-    if (font == nullptr)
+    _font = TTF_OpenFont("/usr/share/fonts/truetype/Sarai/Sarai.ttf", 144);
+    if (_font == nullptr)
     {
         std::cerr << "TTF_OpenFont() Failed: " << TTF_GetError() << std::endl;
         TTF_Quit();
@@ -214,7 +214,7 @@ void TSVideo::setAutomaticBitrate()
     this->_ioCtx->_networkManager->setAutomaticBitrate();
 }
 
-void TSVideo::setManualBitrate(int32_t whence)
+int32_t TSVideo::setManualBitrate(int32_t whence)
 {
-    this->_ioCtx->_networkManager->setManualBitrate(whence);
+    return this->_ioCtx->_networkManager->setManualBitrate(whence);
 }

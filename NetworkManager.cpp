@@ -168,7 +168,7 @@ bool NetworkManager::positionHasALoadedSegment(int32_t pos)
     return toReturn;
 }
 
-void NetworkManager::setManualBitrate(int32_t whence)
+int32_t NetworkManager::setManualBitrate(int32_t whence)
 {
     this->_automaticAdaptiveBitrate = false;
     if(this->_lastBitrate == 0)
@@ -200,6 +200,7 @@ void NetworkManager::setManualBitrate(int32_t whence)
             0:this->_manualSelectedBitrateIndex - 1;
     }
     std::cout << "BITRATE:" << this->_bitrates->at(this->_manualSelectedBitrateIndex) / 1000 << " Kbps" << std::endl;
+    return this->_bitrates->at(this->_manualSelectedBitrateIndex);
 }
 
 void NetworkManager::setAutomaticBitrate()

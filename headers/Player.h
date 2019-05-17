@@ -5,6 +5,7 @@
 #include "TSVideo.h"
 #include "NetworkManager.h"
 #include <vector>
+#include <string>
 
 extern "C"  
 { 
@@ -30,7 +31,6 @@ class Player
         int32_t _desiredHeight;
         int32_t _desiredMaxMemory;
         bool _desiredFullScreen;
-        void loadSegments();
         bool pollEvent(SDL_Event, TSVideo*);
         TSVideo* _tsVideo;
         size_t _currentPosition;
@@ -49,6 +49,8 @@ class Player
         SwrContext* _swrCtx;
         struct SwsContext* _swsCtx;
         SDL_Rect _sdlRect;
+        std::string _statusMessage;
+        int32_t _messageSetTimestamp;
     public:
         static const uint32_t VIDEO_PID_VAL;
         static const uint32_t AUDIO_PID_VAL;
@@ -61,8 +63,14 @@ class Player
         Player(Playlist*, int32_t, int32_t, int32_t, bool);
         Player(std::vector<Playlist*>*, std::vector<int32_t>*, int32_t, int32_t, int32_t, bool);
         ~Player();
+        void loadSegments();
+        int32_t prepare();
         bool playNext();
+        inline void setPlaylists(std::vector<Playlist*>* playlists){_playlists = playlists;};
+        inline void setBitrates(std::vector<int32_t>* bitrates){_bitrates = bitrates;};
         friend void loadSegmentsThread(Player* player);
+        friend void videoFunction(AVCodecContext*, SwsContext*, AVFrame*, SDL_Texture*, SDL_Rect*, SDL_Renderer*, TSVideo*,
+            int32_t, int32_t, int32_t, int32_t, Player*);
 };
 
 #endif

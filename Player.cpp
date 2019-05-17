@@ -13,6 +13,7 @@ extern "C"
 #include <ios>
 #include <thread>
 #include <cassert>
+#include <map>
 
 void AudioReadFunc(void*, uint8_t*, int);
 
@@ -35,6 +36,7 @@ Player::Player(Playlist* playlist, int32_t width, int32_t height, int32_t maxMem
     this->_desiredHeight = height;
     this->_desiredMaxMemory = maxMemory;
     this->_desiredFullScreen = fullScreen;
+    this->_statusMessage = " ";
     av_register_all();
 	avcodec_register_all();
 	avdevice_register_all();
@@ -50,7 +52,6 @@ Player::Player(Playlist* playlist, int32_t width, int32_t height, int32_t maxMem
     _lastPoll = 0;
     _pFrameYUV = av_frame_alloc();
     TTF_Init();
-    loadSegments();
     av_log_set_level(AV_LOG_PANIC);
 }
 
@@ -65,6 +66,7 @@ Player::Player(std::vector<Playlist*>* playlists, std::vector<int32_t>* bitrates
     this->_desiredHeight = height;
     this->_desiredMaxMemory = maxMemory;
     this->_desiredFullScreen = fullScreen;
+    this->_statusMessage = " ";
     av_register_all();
 	avcodec_register_all();
 	avdevice_register_all();
@@ -79,7 +81,6 @@ Player::Player(std::vector<Playlist*>* playlists, std::vector<int32_t>* bitrates
     _audioStream = -1;
     _pFrameYUV = av_frame_alloc();
     TTF_Init();
-    loadSegments();
     av_log_set_level(AV_LOG_PANIC);
 }
 
@@ -134,13 +135,11 @@ bool Player::pollEvent(SDL_Event event, TSVideo* actual)
                 uint32_t currentTicks = SDL_GetTicks();
                 if(!this->_tsVideo->_acceptsInterrupts || (currentTicks - _tsVideo->_lastPoll < 1000 && _tsVideo->_lastPoll != 0))
                 {
-                    std::cout << "Rejected" << std::endl;
                     return true;
                 }
                 else
                 {
                     this->_lastPoll = SDL_GetTicks();
-                    std::cout << "Accepted" << std::endl;
                 }
                 if(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
                 {
@@ -153,42 +152,104 @@ bool Player::pollEvent(SDL_Event event, TSVideo* actual)
                 }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_LEFT)
                 {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Seek        ";
                     actual->seek(-15, SEEK_CUR, actual->getLastTimestamp());
                 }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_RIGHT)
                 {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Seek        ";
                     actual->seek(15, SEEK_CUR, actual->getLastTimestamp());
                 }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_0 || event.key.keysym.scancode == SDL_SCANCODE_KP_0)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Seek        ";
                     actual->seek(0, SEEK_SET, actual->getLastTimestamp());
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_1 || event.key.keysym.scancode == SDL_SCANCODE_KP_1)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Seek        ";
                     actual->seek(1, SEEK_SET, actual->getLastTimestamp());
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_2 || event.key.keysym.scancode == SDL_SCANCODE_KP_2)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Seek        ";
                     actual->seek(2, SEEK_SET, actual->getLastTimestamp());
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_3 || event.key.keysym.scancode == SDL_SCANCODE_KP_3)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Seek        ";
                     actual->seek(3, SEEK_SET, actual->getLastTimestamp());
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_4 || event.key.keysym.scancode == SDL_SCANCODE_KP_4)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Seek        ";
                     actual->seek(4, SEEK_SET, actual->getLastTimestamp());
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_5 || event.key.keysym.scancode == SDL_SCANCODE_KP_5)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Seek        ";
                     actual->seek(5, SEEK_SET, actual->getLastTimestamp());
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_6 || event.key.keysym.scancode == SDL_SCANCODE_KP_6)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Seek        ";
                     actual->seek(6, SEEK_SET, actual->getLastTimestamp());
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_7 || event.key.keysym.scancode == SDL_SCANCODE_KP_7)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Seek        ";
                     actual->seek(7, SEEK_SET, actual->getLastTimestamp());
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_8 || event.key.keysym.scancode == SDL_SCANCODE_KP_8)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Seek        ";
                     actual->seek(8, SEEK_SET, actual->getLastTimestamp());
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_9 || event.key.keysym.scancode == SDL_SCANCODE_KP_9)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Seek        ";
                     actual->seek(9, SEEK_SET, actual->getLastTimestamp());
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_KP_PLUS)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Volume:  " + std::to_string(volumeRate * 10) + "%";
                     volumeRate = (volumeRate < 10)?volumeRate + 1 : volumeRate;
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_KP_MINUS)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Volume:  " + std::to_string(volumeRate * 10) + "%";
                     volumeRate = (volumeRate > 0)?volumeRate - 1 : volumeRate;
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_UP)
-                    this->_tsVideo->setManualBitrate(1);
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Bitrate: " + std::to_string(this->_tsVideo->setManualBitrate(1) / 1000) + "Kbps";
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_DOWN)
-                    this->_tsVideo->setManualBitrate(-1);
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Bitrate: " + std::to_string(this->_tsVideo->setManualBitrate(-1) / 1000) + "Kbps";
+                }
                 else if(event.key.keysym.scancode == SDL_SCANCODE_A)
+                {
+                    this->_messageSetTimestamp = SDL_GetTicks();
+                    this->_statusMessage = "Bitrate: Automatic";
                     this->_tsVideo->setAutomaticBitrate();
+                }
             }
         default:  
             break;  
@@ -213,16 +274,19 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
         SDL_SemWait(audioSemaphore);
         AVFrame* _pFrame = av_frame_alloc();
         AVPacket* packet = current->dequeueAudio();
-        if(packet == nullptr)
+        if(packet == nullptr || packet == NULL)
         {
             av_frame_free(&_pFrame);
             continue;
         }
-        if(_pFrame == nullptr)
+        if(_pFrame == nullptr || _pFrame == NULL)
+        {
+            av_packet_free(&packet);
             continue;
+        }
         if(!audioThreadRunning)
         {
-            std::cout << "audio ended early" << std::endl;
+            av_packet_free(&packet);
             av_frame_free(&_pFrame);
             return;
         }
@@ -282,16 +346,28 @@ AVFrame* lastValidFrame = nullptr;
 
 void videoFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFrame* _pFrameYUV,
     SDL_Texture* _playerTexture, SDL_Rect* _sdlRect, SDL_Renderer* _playerRenderer, TSVideo* current,
-    int32_t windowWidth, int32_t windowHeight, int32_t textWidth, int32_t textHeight)
+    int32_t windowWidth, int32_t windowHeight, int32_t textWidth, int32_t textHeight, Player* player)
 {
     AVFrame* _pFrame = av_frame_alloc();
     AVPacket* packet = current->dequeueVideo();
-    if(packet == nullptr)
+    if(packet == nullptr || packet == NULL)
+    {
+        av_frame_free(&_pFrame);
         return;
+    }
+    if(_pFrame == nullptr || _pFrame == NULL)
+    {
+        av_packet_free(&packet);
+        return;
+    }
     int frameFinished;
     int32_t startTicks = SDL_GetTicks();
     int decodeStatus = avcodec_decode_video2(codecContext, _pFrame, &frameFinished, packet);
-    if(decodeStatus < 0)return;
+    if(decodeStatus < 0)
+    {
+        av_frame_free(&_pFrame);
+        return;
+    }
     if(frameFinished)
     {
         if(!waitingForKeyFrame || _pFrame->key_frame == 1)
@@ -317,17 +393,11 @@ void videoFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFrame* _
                 desiredVideoWidth = windowWidth;
                 desiredVideoHeight = _pFrame->height * widthWindowToVideoRatio;
             }
-            uint32_t seconds = _pFrame->pts / 100000;
-            std::stringstream timestampString;
-            timestampString << seconds / 3600 << ":" << std::setfill('0') << std::setw(2) << (seconds % 3600) / 60 << ":" << std::setfill('0') << std::setw(2)  << seconds % 60
-            << " / " << current->getFullDuration() / 3600 << ":" << std::setfill('0') << std::setw(2) << (current->getFullDuration() % 3600) / 60 << ":" << std::setfill('0') << std::setw(2)
-            << current->getFullDuration() % 60;
-
-            current->setLastTimestamp(seconds);
             SDL_Surface *text;
             SDL_Color text_color = {255, 255, 255};
+            if(SDL_GetTicks() - player->_messageSetTimestamp > 1500)player->_statusMessage = " ";
             text = TTF_RenderText_Solid(current->getFont(),
-            timestampString.str().c_str(),
+            player->_statusMessage.c_str(),
             text_color);
 
             if (text == NULL)
@@ -340,8 +410,8 @@ void videoFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFrame* _
 
             SDL_Texture* screenPrint = SDL_CreateTextureFromSurface(_playerRenderer, text);
             SDL_Rect messageRect;
-            messageRect.x = windowWidth / 2 - textWidth / 2;
-            messageRect.y = windowHeight - textHeight;
+            messageRect.x = 0;
+            messageRect.y = 0;
             messageRect.w = textWidth;
             messageRect.h = textHeight;
             _swsCtx = sws_getContext(
@@ -389,56 +459,17 @@ void videoFunction(AVCodecContext* codecContext, SwsContext* _swsCtx, AVFrame* _
             SDL_DestroyTexture(screenPrint);
             SDL_FreeSurface(text);
         }
-        else
-        {
-            SDL_Surface *text;
-            SDL_Color text_color = {255, 255, 255};
-            text = TTF_RenderText_Solid(current->getFont(),
-            "Seeking...",
-            text_color);
-
-            if (text == NULL)
-            {
-                std::cerr << "TTF_RenderText_Solid() Failed: " << TTF_GetError() << std::endl;
-                TTF_Quit();
-                SDL_Quit();
-                exit(1);
-            }
-
-            SDL_Texture* screenPrint = SDL_CreateTextureFromSurface(_playerRenderer, text);
-            SDL_Rect messageRect;
-            messageRect.x = 0;
-            messageRect.y = 0;
-            messageRect.w = textWidth;
-            messageRect.h = textHeight;
-
-
-            sws_scale(  
-            _swsCtx,  
-            (uint8_t const * const *)_pFrame->data,  
-            _pFrame->linesize,  
-            0,  
-            codecContext->height,
-            _pFrameYUV->data,
-            _pFrameYUV->linesize
-            );
-            SDL_RenderCopy(_playerRenderer, screenPrint, nullptr, &messageRect);
-            SDL_RenderPresent(_playerRenderer);
-            SDL_DestroyTexture(screenPrint);
-            SDL_FreeSurface(text);
-
-        }
         int32_t endTicks = SDL_GetTicks();
-        int32_t maxDelay = (1000.0 / av_q2d(codecContext->framerate));
+        int32_t maxDelay = (1000.0 / av_q2d(codecContext->framerate)) * 2;
         int32_t delay = (1000.0 / av_q2d(codecContext->framerate)) - (endTicks - startTicks);
         delay = (delay < 0)?0:delay;
         int32_t avDesync = (current->getReferencePts() - _pFrame->pts) / 9000;
-        if(avDesync > 1)delay += avDesync - 1;
+        if(avDesync > 1)delay += avDesync;
         delay = (delay < 0)?0:delay;
         if(delay > maxDelay)delay = maxDelay;
         SDL_Delay(delay);
     }
-    av_free(_pFrame);
+    av_frame_free(&_pFrame);
 }
 
 bool Player::playNext()
@@ -620,12 +651,12 @@ bool Player::playNext()
                 if(this->_desiredFullScreen)
                 {
                     videoFunction(codecContext, _swsCtx, _pFrameYUV, _playerTexture, &_sdlRect, _playerRenderer, current,
-                        displayMode.w, displayMode.h, displayMode.w / 10, displayMode.h / 10);
+                        displayMode.w, displayMode.h, displayMode.w / 10, displayMode.h / 10, this);
                 }
                 else
                 {
                     videoFunction(codecContext, _swsCtx, _pFrameYUV, _playerTexture, &_sdlRect, _playerRenderer, current,
-                        this->_desiredWidth, this->_desiredHeight, this->_desiredWidth / 10, this->_desiredHeight / 10);
+                        this->_desiredWidth, this->_desiredHeight, this->_desiredWidth / 6, this->_desiredHeight / 10, this);
                 }
                 
             }
@@ -646,4 +677,23 @@ bool Player::playNext()
     SDL_CloseAudio();
     std::cout << "COMPLETED" << std::endl;
     return false;
+}
+
+int32_t Player::prepare()
+{
+    std::map<int32_t, int32_t> occurences;
+    for(int32_t i = 0; i < (int32_t)_playlists->size(); i++)
+    {
+        occurences[(int32_t)_playlists->at(i)->getSegments()->size()]++;
+    }
+    int32_t max = 0;
+    int32_t toReturn = 0;
+    for(std::map<int32_t, int32_t>::iterator iter = occurences.begin(); iter != occurences.end(); ++iter)
+    {
+       std::cout << iter->first << std::endl;
+       if(iter->second > max)toReturn = iter->first;
+    }
+    _playlists->clear();
+    _bitrates->clear();
+    return toReturn;
 }

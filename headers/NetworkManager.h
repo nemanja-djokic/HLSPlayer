@@ -36,7 +36,7 @@ public:
     void updateCurrentSegment(int32_t);
     double getBlockDuration(int32_t);
     PlaylistSegment* getSegment(int32_t);
-    void setManualBitrate(int32_t);
+    int32_t setManualBitrate(int32_t);
     void setAutomaticBitrate();
     inline int32_t isBitrateDiscontinuity(){return _bitrateDiscontinuity;};
     inline void clearBitrateDiscontinuity(){_bitrateDiscontinuity = false;};

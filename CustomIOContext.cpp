@@ -30,7 +30,7 @@ int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 		SDL_SemPost(hctx->_networkManager->getBlockEndSemaphore());
 		SDL_SemPost(hctx->_networkManager->getBlockEndSemaphore());
 		std::cerr << "Loading in read callback!" << std::endl;
-		currentSegment->loadSegment();
+		while(!currentSegment->getIsLoaded())currentSegment->loadSegment();
 	}
 	if(pos + buf_size <= (int)currentSegment->loadedSize())
 	{

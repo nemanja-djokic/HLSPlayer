@@ -35,7 +35,7 @@ class TSVideo
         SDL_mutex* _audioQueueMutex;
         double _differenceCumulative;
         int32_t _differenceCounter;
-        TTF_Font* font;
+        TTF_Font* _font;
         std::queue<AVPacket>* _videoQueue;
         std::queue<AVPacket>* _audioQueue;
         uint32_t _lastTimestamp;
@@ -52,7 +52,7 @@ class TSVideo
         inline uint32_t getLastTimestamp(){return _lastTimestamp;};
         inline void setLastTimestamp(uint32_t timestamp){_lastTimestamp = timestamp;};
         inline bool isSaved(){return _isSaved;};
-        inline TTF_Font* getFont(){return font;};
+        inline TTF_Font* getFont(){return _font;};
         inline bool getHasData(){return _hasData;};
         inline size_t getSize(){return _videoPayload.size();};
         void prepareFormatContext();
@@ -68,7 +68,7 @@ class TSVideo
         inline void assignAudioCodec(AVCodecContext* audioCodec){_audioCodec = audioCodec;_ioCtx->_audioCodec = audioCodec;};
         inline int32_t getAudioQueueSize(){return _audioQueue->size();};
         inline int32_t getVideoQueueSize(){return _videoQueue->size();};
-        void setManualBitrate(int32_t);
+        int32_t setManualBitrate(int32_t);
         void setAutomaticBitrate();
         uint32_t getSeconds();
         inline void setReferencePts(int32_t referencePts){_currentReferencePts = referencePts;};
