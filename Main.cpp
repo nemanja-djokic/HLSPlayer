@@ -90,6 +90,6 @@ int main(int argc, char* argv[])
     player.setPlaylists(playlistVector);
     player.setBitrates(bitratesVector);
     player.loadSegments();
-    while(player.playNext());
+    player.play();
     return 0;
 }

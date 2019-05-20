@@ -24,6 +24,8 @@ int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 	{
 		return 0;
 	}
+	if(hctx->_block == hctx->_networkManager->getSegmentsSize() - 1)hctx->_lastBlock = true;
+	else hctx->_lastBlock = false;
 	if(!currentSegment->getIsLoaded())
 	{
 		hctx->_networkManager->updateCurrentSegment(hctx->_block);
@@ -36,7 +38,6 @@ int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 	{
 		if(hctx->_pos == 0 && hctx->_networkManager->isBitrateDiscontinuity())
 		{
-			std::cout << "Discontinuity reset" << std::endl;
 			hctx->_resetAudio = true;
 			avio_flush(hctx->_ioCtx);
 			avformat_flush(hctx->_formatContext);
@@ -73,6 +74,7 @@ int IOReadFunc(void *data, uint8_t *buf, int buf_size)
         	}
 			hctx->_networkManager->clearBitrateDiscontinuity();
 		}
+		hctx->_softResetAudio = true;
 		memcpy(buf, currentSegment->getTsData() + pos, currentSegment->loadedSize() - pos);
 		hctx->_pos = 0;
 		hctx->_block++;
@@ -98,6 +100,7 @@ int64_t IOSeekFunc(void *data, int64_t offset, int whence)
 	if(whence == SEEK_SET)
 	{
 		hctx->_resetAudio = true;
+		hctx->_softResetAudio = true;
 		avio_flush(hctx->_ioCtx);
 		hctx->_block = hctx->_blockToSeek;
 		hctx->_pos = 0;
@@ -118,6 +121,8 @@ int IOWriteFunc(void *data, uint8_t *buf, int buf_size)
 CustomIOContext::CustomIOContext() {
 	_bufferMutex = SDL_CreateMutex();
 	_resetAudio = false;
+	_softResetAudio = false;
+	_lastBlock = false;
 	_bufferSize = 16384;
 	_pos = 0;
 	_block = 0;

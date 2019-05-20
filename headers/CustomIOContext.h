@@ -27,6 +27,8 @@ private:
 
     NetworkManager* _networkManager;
     bool _resetAudio;
+    bool _softResetAudio;
+    bool _lastBlock;
     AVIOContext* _ioCtx;
 	uint8_t* _buffer;
 	int _bufferSize;

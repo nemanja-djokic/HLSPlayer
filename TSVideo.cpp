@@ -131,6 +131,14 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
             this->_ioCtx->_blockToSeek = selectedBlock;
             this->_ioCtx->_ioCtx->seek(this->_ioCtx, posOffset, SEEK_SET);
             avio_flush(this->_ioCtx->_ioCtx);
+            if(_videoCodec != nullptr)
+            {
+                avcodec_flush_buffers(_videoCodec);
+            }
+            else
+            {
+                std::cerr << "(TSVideo) Video codec unassigned" << std::endl;
+            }
             if(_audioCodec != nullptr)
             {
                 avformat_flush(this->_ioCtx->_formatContext);
@@ -174,6 +182,14 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
             seekPos /= 1000;
             this->_ioCtx->_ioCtx->seek(this->_ioCtx, seekPos, SEEK_SET);
             avio_flush(this->_ioCtx->_ioCtx);
+            if(_videoCodec != nullptr)
+            {
+                avcodec_flush_buffers(_videoCodec);
+            }
+            else
+            {
+                std::cerr << "(TSVideo) Video codec unassigned" << std::endl;
+            }
             if(_audioCodec != nullptr)
             {
                 avformat_flush(this->_ioCtx->_formatContext);

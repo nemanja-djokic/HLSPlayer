@@ -65,7 +65,7 @@ class Player
         ~Player();
         void loadSegments();
         int32_t prepare();
-        bool playNext();
+        bool play();
         inline void setPlaylists(std::vector<Playlist*>* playlists){_playlists = playlists;};
         inline void setBitrates(std::vector<int32_t>* bitrates){_bitrates = bitrates;};
         friend void loadSegmentsThread(Player* player);

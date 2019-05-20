@@ -60,7 +60,10 @@ class TSVideo
         void seek(int64_t, int64_t, int64_t);
         inline int32_t getCurrentPlayingSegment(){return _ioCtx->_block;};
         inline bool isResetAudio(){return _ioCtx->isResetAudio();};
+        inline bool isSoftResetAudio(){return _ioCtx->_softResetAudio;};
         inline void clearResetAudio(){_ioCtx->clearResetAudio();};
+        inline void clearSoftResetAudio(){_ioCtx->_softResetAudio = false;};
+        inline bool isLastBlock(){return _ioCtx->_lastBlock;};
         inline bool isBuffersSafe(){return _videoQueue->size() > 0 && _audioQueue->size() > 0;};
         inline SDL_mutex* getVideoPlayerMutex(){return _videoPlayerMutex;};
         inline CustomIOContext* getCustomIOContext(){return _ioCtx;};
@@ -79,20 +82,24 @@ class TSVideo
             _videoQueue->push(packet);
             SDL_UnlockMutex(_videoQueueMutex);
         };
-        inline AVPacket* dequeueVideo()
+        inline AVPacket dequeueVideo()
         {
             SDL_LockMutex(_videoQueueMutex);
             if(_videoQueue->empty())
             {
                 SDL_UnlockMutex(_videoQueueMutex);
-                return nullptr;
+                AVPacket toReturn;
+                toReturn.data = nullptr;
+                return toReturn;
             }
             if(_videoQueue->size() == 0)
             {
                 SDL_UnlockMutex(_videoQueueMutex);
-                return nullptr;
+                AVPacket toReturn;
+                toReturn.data = nullptr;
+                return toReturn;
             }
-            AVPacket* toRet = &_videoQueue->front();
+            AVPacket toRet = _videoQueue->front();
             _videoQueue->pop();
             SDL_UnlockMutex(_videoQueueMutex);
             return toRet;
@@ -104,20 +111,24 @@ class TSVideo
             _audioQueue->push(packet);
             SDL_UnlockMutex(_audioQueueMutex);
         };
-        inline AVPacket* dequeueAudio()
+        inline AVPacket dequeueAudio()
         {
             SDL_LockMutex(_audioQueueMutex);
             if(_audioQueue->empty())
             {
                 SDL_UnlockMutex(_audioQueueMutex);
-                return nullptr;
+                AVPacket toReturn;
+                toReturn.data = nullptr;
+                return toReturn;
             }
             if(_audioQueue->size() == 0)
             {
                 SDL_UnlockMutex(_audioQueueMutex);
-                return nullptr;
+                AVPacket toReturn;
+                toReturn.data = nullptr;
+                return toReturn;
             }
-            AVPacket* toRet = &_audioQueue->front();
+            AVPacket toRet = _audioQueue->front();
             _audioQueue->pop();
             SDL_UnlockMutex(_audioQueueMutex);
             return toRet;
