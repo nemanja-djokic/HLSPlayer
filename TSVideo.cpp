@@ -19,7 +19,11 @@ TSVideo::TSVideo()
     this->_audioCodec = nullptr;
     this->_acceptsInterrupts = true;
     this->_lastPoll = 0;
+    this->_audioSemaphore = SDL_CreateSemaphore(0);
+    this->_audioThreadRunning = true;
+    this->_enqueuedFirstAudio = false;
     _lastTimestamp = -1;
+    _framesToSkip = 0;
     _videoQueue = new std::queue<AVPacket>();
     _audioQueue = new std::queue<AVPacket>();
     _tsBlockBegin = new std::vector<int32_t>();
@@ -148,11 +152,33 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
             {
                 std::cerr << "(TSVideo) Audio codec unassigned" << std::endl;
             }
+            SDL_LockMutex(this->_audioQueueMutex);while(!this->_audioQueue->empty())this->_audioQueue->pop();SDL_UnlockMutex(this->_audioQueueMutex);
+            SDL_LockMutex(this->_videoQueueMutex);while(!this->_videoQueue->empty())this->_videoQueue->pop();SDL_UnlockMutex(this->_videoQueueMutex);
             SDL_UnlockMutex(_videoPlayerMutex);
         }
         else if(whence == SEEK_SET)
         {
             int64_t seekTimestamp = (this->getFullDuration() * offset) / 10;
+            avio_flush(this->_ioCtx->_ioCtx);
+            if(_videoCodec != nullptr)
+            {
+                avcodec_flush_buffers(_videoCodec);
+            }
+            else
+            {
+                std::cerr << "(TSVideo) Video codec unassigned" << std::endl;
+            }
+            if(_audioCodec != nullptr)
+            {
+                avformat_flush(this->_ioCtx->_formatContext);
+                avcodec_flush_buffers(_audioCodec);
+            }
+            else
+            {
+                std::cerr << "(TSVideo) Audio codec unassigned" << std::endl;
+            }
+            SDL_LockMutex(this->_audioQueueMutex);while(!this->_audioQueue->empty())this->_audioQueue->pop();SDL_UnlockMutex(this->_audioQueueMutex);
+            SDL_LockMutex(this->_videoQueueMutex);while(!this->_videoQueue->empty())this->_videoQueue->pop();SDL_UnlockMutex(this->_videoQueueMutex);
             this->seek(seekTimestamp, SEEK_DATA, currentTimestamp);
         }
         else if(whence == SEEK_DATA)
@@ -171,7 +197,10 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
             }
             if(selectedBlock == -1)
             {
+                SDL_LockMutex(this->_audioQueueMutex);while(!this->_audioQueue->empty())this->_audioQueue->pop();SDL_UnlockMutex(this->_audioQueueMutex);
+                SDL_LockMutex(this->_videoQueueMutex);while(!this->_videoQueue->empty())this->_videoQueue->pop();SDL_UnlockMutex(this->_videoQueueMutex);
                 this->_acceptsInterrupts = true;
+                SDL_UnlockMutex(_videoPlayerMutex);
                 return;
             }
             if(!this->_ioCtx->_networkManager->getSegment(selectedBlock)->getIsLoaded())
@@ -199,6 +228,8 @@ void TSVideo::seek(int64_t offset, int64_t whence, int64_t currentTimestamp)
             {
                 std::cerr << "(TSVideo) Audio codec unassigned" << std::endl;
             }
+            SDL_LockMutex(this->_audioQueueMutex);while(!this->_audioQueue->empty())this->_audioQueue->pop();SDL_UnlockMutex(this->_audioQueueMutex);
+            SDL_LockMutex(this->_videoQueueMutex);while(!this->_videoQueue->empty())this->_videoQueue->pop();SDL_UnlockMutex(this->_videoQueueMutex);
             SDL_UnlockMutex(_videoPlayerMutex);
         }
     }

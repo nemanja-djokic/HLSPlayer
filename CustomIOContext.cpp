@@ -5,6 +5,24 @@ extern "C"
 }
 #include <iostream>
 
+void AudioReadFunc(void* data, uint8_t *stream, int len)
+{
+	CustomIOContext* hctx = (CustomIOContext*)data;
+    SDL_LockMutex(hctx->_audioMutex);
+	SDL_memset(stream, 0, len);
+	if(hctx->_audioLen == 0)
+    {
+        SDL_UnlockMutex(hctx->_audioMutex);
+		return; 
+    }
+	len = ((uint32_t)len>hctx->_audioLen ? hctx->_audioLen : len);
+
+	SDL_MixAudio(stream, hctx->_audioPos, len, SDL_MIX_MAXVOLUME * hctx->_volumeRate / 10);
+	hctx->_audioPos += len; 
+    hctx->_audioLen -= len;
+    SDL_UnlockMutex(hctx->_audioMutex);
+}
+
 int IOReadFunc(void *data, uint8_t *buf, int buf_size)
 {
 	CustomIOContext *hctx = (CustomIOContext*)data;
@@ -101,12 +119,21 @@ int64_t IOSeekFunc(void *data, int64_t offset, int whence)
 	{
 		hctx->_resetAudio = true;
 		hctx->_softResetAudio = true;
-		avio_flush(hctx->_ioCtx);
 		hctx->_block = hctx->_blockToSeek;
 		hctx->_pos = 0;
 		hctx->_networkManager->updateCurrentSegment(hctx->_block);
 		SDL_SemPost(hctx->_networkManager->getBlockEndSemaphore());
 		SDL_UnlockMutex(hctx->_bufferMutex);
+		avio_flush(hctx->_ioCtx);
+		avformat_flush(hctx->_formatContext);
+		if(hctx->_videoCodec != nullptr)
+        {
+           	avcodec_flush_buffers(hctx->_videoCodec);
+        }
+		if(hctx->_audioCodec != nullptr)
+        {
+        	avcodec_flush_buffers(hctx->_audioCodec);
+        }
 		return hctx->_block * hctx->_pos;
 	}
 	SDL_UnlockMutex(hctx->_bufferMutex);
@@ -120,6 +147,8 @@ int IOWriteFunc(void *data, uint8_t *buf, int buf_size)
 
 CustomIOContext::CustomIOContext() {
 	_bufferMutex = SDL_CreateMutex();
+    this->_volumeRate = 10;
+    this->_audioMutex = SDL_CreateMutex();
 	_resetAudio = false;
 	_softResetAudio = false;
 	_lastBlock = false;

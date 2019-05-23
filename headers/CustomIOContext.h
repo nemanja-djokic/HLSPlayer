@@ -35,6 +35,11 @@ private:
     int32_t _block;
     int32_t _pos;
     int32_t _blockToSeek;
+    int32_t _volumeRate;
+    SDL_mutex* _audioMutex;
+    uint8_t* _audioChunk; 
+    uint32_t _audioLen; 
+    uint8_t* _audioPos;
     AVCodecContext* _videoCodec;
     AVCodecContext* _audioCodec;
     AVFormatContext* _formatContext;
@@ -45,6 +50,7 @@ public:
 
     friend int IOReadFunc(void *data, uint8_t *buf, int buf_size);
     friend int64_t IOSeekFunc(void *data, int64_t offset, int whence);
+    friend void AudioReadFunc(void* data, uint8_t *stream, int len);
     friend class TSVideo;
     friend class Player;
 	CustomIOContext();

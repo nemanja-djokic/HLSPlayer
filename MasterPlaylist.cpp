@@ -25,14 +25,6 @@ MasterPlaylist* MasterPlaylist::parseMasterPlaylist(std::string hlsRoot, std::st
         line = HlsUtil::trim(line);
         if(lineCount == 0 && line.compare(MASTER_PLAYLIST_FIRST_LINE) != 0)
         {
-            if(lineCount == 0)
-                std::cerr << "lineCount 0" << std::endl;
-            if(line.compare(MASTER_PLAYLIST_FIRST_LINE) != 0)
-            {
-                std::cout << "comparing:" << std::endl;
-                std::cout << line << std::endl;
-                std::cout << MASTER_PLAYLIST_FIRST_LINE << std::endl;
-            }
             std::cerr << "MASTER_PLAYLIST_FIRST_LINE_NOT_FOUND" << std::endl;
             delete toReturn;
             return nullptr;
