@@ -6,7 +6,6 @@
 #include "ExtXStreamInf.h"
 #include "Playlist.h"
 
-//Contains all possible tags that can appear in master playlist
 class MasterPlaylist
 {
     private:
