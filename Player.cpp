@@ -242,7 +242,7 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
     SDL_PauseAudio(0);
     while(current->getAudioThreadRunning())
     {
-        //SDL_SemWait(current->getAudioSemaphore());
+        SDL_SemWait(current->getAudioSemaphore());
         AVFrame* _pFrame = av_frame_alloc();
         AVPacket packet = current->dequeueAudio();
         if(packet.data == nullptr || packet.data == NULL)
