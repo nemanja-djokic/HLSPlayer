@@ -214,22 +214,6 @@ void networkManagerThread(NetworkManager* networkManager)
 {
     while(true)
     {
-        /*int32_t start = (networkManager->_currentSegment - 30 < 0)?0:networkManager->_currentSegment - 30;
-        int32_t end = (networkManager->_currentSegment + 30 > (int32_t)networkManager->_videoSegmentWeights.size())?
-            networkManager->_videoSegmentWeights.size():networkManager->_currentSegment + 30;
-        std::cout << "===== " << networkManager->_referenceBitrate / 1024 << " Kbps =====" << std::endl;
-        for(int32_t j = 0; j < (int32_t)networkManager->_playlists->size(); j++)
-        {
-            std::cout << std::setw(15) << networkManager->_bitrates->at(j) / 1000 << " Kbps: " << start << " ";
-            for(int32_t i = start;  i < end; i++)
-            {
-                PlaylistSegment* localSegment = networkManager->_playlists->at(j)->getSegments()->at(i);
-                if(localSegment->getIsLoaded())std::cout << "*";
-                else std::cout << "-";
-                if(i == networkManager->_currentSegment)std::cout << "#";
-            }
-            std::cout << " " << end << std::endl;
-        }*/
         SDL_SemWait(networkManager->_blockEndSemaphore);
         networkManager->_videoSegmentWeights.at(networkManager->_currentSegment) = networkManager->_maxPriority;
         for(size_t i = 0; i < networkManager->_videoSegmentWeights.size(); i++)

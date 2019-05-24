@@ -12,7 +12,6 @@ class MasterPlaylist
     private:
         std::vector<ExtXStreamInf> _extXStreamInf;
         std::string _rootPlaylistUrl;
-        std::string getEndpointForBitrate(int bitrate);
     public:
         static MasterPlaylist* parseMasterPlaylist(std::string, std::string);
         inline std::vector<ExtXStreamInf> getExtXStreamInf(){return _extXStreamInf;};

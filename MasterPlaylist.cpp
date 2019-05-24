@@ -66,17 +66,6 @@ std::vector<int> MasterPlaylist::getAvailableBitrates()
     return toReturn;
 }
 
-std::string MasterPlaylist::getEndpointForBitrate(int bitrate)
-{
-    for(std::vector<ExtXStreamInf>::iterator it = _extXStreamInf.begin(); it != _extXStreamInf.end(); ++it)
-    {
-        int iterBitrate = std::stof(it->getBandwidth());
-        if(bitrate == iterBitrate)
-            return it->getEndpoint();
-    }
-    return nullptr;
-}
-
 std::string MasterPlaylist::getPlaylistContent(std::string endpoint)
 {
     if(endpoint.c_str()[endpoint.length() - 1] == '\n')
@@ -89,7 +78,7 @@ std::string MasterPlaylist::getPlaylistContent(std::string endpoint)
     {
         std::cerr << "curl_easy_init() failed" << std::endl;
         curl_easy_cleanup(curl);
-        return nullptr;
+        return std::string();
     }
     std::string tempBuffer;
     CURLcode res;
@@ -103,7 +92,7 @@ std::string MasterPlaylist::getPlaylistContent(std::string endpoint)
     {
         std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
         curl_easy_cleanup(curl);
-        return nullptr;
+        return std::string();
     }
 
     return tempBuffer;

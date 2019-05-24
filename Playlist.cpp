@@ -12,6 +12,7 @@ const std::string Playlist::EXTINF_TAG = "#EXTINF:";
 
 Playlist* Playlist::parsePlaylist(std::string content, std::string baseUrl)
 {
+    if(content.empty())return nullptr;
     std::istringstream iss(content);
     int lineCount = 0;
     Playlist* toReturn = new Playlist();

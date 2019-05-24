@@ -55,6 +55,7 @@ int main(int argc, char* argv[])
     {
         bitratesVector->insert(bitratesVector->end(), *it);
         Playlist* playlist = util.getPlaylistForBitrate(*it);
+        if(playlist == nullptr)continue;
         playlist->setBitrate(*it);
         playlistVector->insert(playlistVector->end(), playlist);
     }
@@ -69,6 +70,7 @@ int main(int argc, char* argv[])
     for(std::vector<int>::iterator it = bitrates.begin(); it != bitrates.end(); ++it)
     {
         Playlist* playlist = util.getPlaylistForBitrate(*it);
+        if(playlist == nullptr)continue;
         if((int32_t)playlist->getSegments()->size() != max)
         {
             continue;

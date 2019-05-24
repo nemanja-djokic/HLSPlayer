@@ -280,15 +280,22 @@ void audioThreadFunction(AVCodecContext* audioCodecContext, int* gotPicture, TSV
         }
         else
         {
-            current->setReferencePts(_pFrame->pts);
-            uint8_t* tempBuffer;
-            tempBuffer = (uint8_t*)av_mallocz(current->getAudioLen() + outBufferSize);
-            memcpy(tempBuffer, current->getAudioPos(), current->getAudioLen());
-            memcpy(tempBuffer + current->getAudioLen(), outBuffer, outBufferSize);
-            av_free(current->getAudioChunk());
-            current->setAudioChunk((uint8_t*)tempBuffer);
-            current->setAudioLen(current->getAudioLen() + outBufferSize);
-            current->setAudioPos(current->getAudioChunk());
+            if(!(current->getFramesToSkip() > 0))
+            {
+                current->setReferencePts(_pFrame->pts);
+                uint8_t* tempBuffer;
+                tempBuffer = (uint8_t*)av_mallocz(current->getAudioLen() + outBufferSize);
+                memcpy(tempBuffer, current->getAudioPos(), current->getAudioLen());
+                memcpy(tempBuffer + current->getAudioLen(), outBuffer, outBufferSize);
+                av_free(current->getAudioChunk());
+                current->setAudioChunk((uint8_t*)tempBuffer);
+                current->setAudioLen(current->getAudioLen() + outBufferSize);
+                current->setAudioPos(current->getAudioChunk());
+            }
+            else
+            {
+                current->setFramesToSkip(current->getFramesToSkip() - 1);
+            }
         }
         SDL_UnlockMutex(current->getAudioMutex());
         av_free(outBuffer);
